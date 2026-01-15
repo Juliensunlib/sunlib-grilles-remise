@@ -163,25 +163,25 @@ class SellsyClientV2:
         # ✅ LIGNE ARTICLE CATALOGUE
         rows = [
             {
-                "type": "item",
+                "type": "catalog",
                 "related": {
                     "type": "item",
                     "id": int(product_id),
                 },
-                "unit_amount": prix_ht,
-                "quantity": 1,
+                "unit_amount": str(prix_ht),
+                "quantity": "1",
                 "tax_id": tva_id,
             }
         ]
 
-        # ✅ LIGNE REMISE (LIBRE)
+        # ✅ LIGNE REMISE (SIMPLE)
         if montant_remise > 0:
             rows.append(
                 {
-                    "type": "free",
-                    "label": libelle_remise,
-                    "unit_amount": -montant_remise,
-                    "quantity": 1,
+                    "type": "single",
+                    "description": libelle_remise,
+                    "unit_amount": str(-montant_remise),
+                    "quantity": "1",
                     "tax_id": tva_id,
                 }
             )
