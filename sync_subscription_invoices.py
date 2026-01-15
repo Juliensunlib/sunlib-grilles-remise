@@ -1,422 +1,318 @@
-#!/usr/bin/env python3
 """
-Synchronisation automatique des factures d'abonnement mensuelles - V2.0
-Crée les factures dans Sellsy avec remise progressive selon les grilles dynamiques
-
-VERSION 2.0 - GRILLES DYNAMIQUES
-- Les remises sont configurables dans Airtable (table grilles_remise)
-- Possibilité de créer plusieurs grilles (VIP, régionales, promotions, etc.)
-- Changement de stratégie sans modification de code
-
-Usage:
-    python sync_subscription_invoices.py
+Synchronisation automatique des factures d'abonnement Sellsy V2.0
+Gestion des remises dynamiques via grilles Airtable
 """
 
+import os
 import sys
-import time
-from datetime import datetime, date
+from datetime import datetime, timedelta
 from dateutil.relativedelta import relativedelta
-from pyairtable import Table
-from airtable_client import AirtableClient
-from sellsy_client import SellsyClient
-from config import (
-    AIRTABLE_API_KEY,
-    AIRTABLE_BASE_ID,
-    AIRTABLE_GRILLES_TABLE_NAME,
-    DRY_RUN,
-    validate_config
+from typing import Dict, List, Optional
+import logging
+
+# Import des clients
+from src.airtable_client import AirtableClient
+from src.sellsy_client import SellsyClient
+
+# Configuration du logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='[%(asctime)s] %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
 )
+logger = logging.getLogger(__name__)
 
-def log_message(message):
-    """Affiche un message horodaté"""
-    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    print(f"[{timestamp}] {message}")
 
-def get_grilles_table():
-    """Initialise la connexion à la table grilles_remise"""
-    return Table(AIRTABLE_API_KEY, AIRTABLE_BASE_ID, AIRTABLE_GRILLES_TABLE_NAME)
-
-def parse_grille(grille_record):
-    """
-    Parse un enregistrement de grille de remise
+class SubscriptionInvoiceSync:
+    """Gestionnaire de synchronisation des factures d'abonnement"""
     
-    Args:
-        grille_record: Enregistrement Airtable de la grille
+    def __init__(self, dry_run: bool = False):
+        """
+        Initialise le synchroniseur
         
-    Returns:
-        dict: Données de la grille structurées
-    """
-    fields = grille_record['fields']
-    
-    return {
-        'id': grille_record['id'],
-        'name': fields.get('Nom de la grille', 'Grille sans nom'),
-        'annee_1_pct': fields.get('Année 1 (%)', 0),
-        'annee_2_pct': fields.get('Année 2 (%)', 0),
-        'annee_3_pct': fields.get('Année 3+ (%)', 0),
-        'label_annee_1': fields.get('Label Année 1', 'Remise Année 1'),
-        'label_annee_2': fields.get('Label Année 2', 'Remise Année 2'),
-        'label_annee_3': fields.get('Label Année 3+', 'Remise Année 3+'),
-        'actif': fields.get('Actif', False)
-    }
-
-def get_discount_grid(grilles_table, service_record):
-    """
-    Récupère la grille de remise applicable pour un abonnement
-    
-    Ordre de priorité :
-    1. Grille spécifique liée à l'abonnement
-    2. Grille par défaut active
-    3. Aucune remise si aucune grille trouvée
-    
-    Args:
-        grilles_table: Instance de la table grilles_remise
-        service_record: Enregistrement Airtable de l'abonnement
+        Args:
+            dry_run: Si True, simule sans créer réellement les factures
+        """
+        self.dry_run = dry_run
         
-    Returns:
-        dict: Données de la grille ou None
-    """
-    fields = service_record['fields']
-    
-    # Cas 1 : Grille spécifique liée à l'abonnement
-    if 'Grille de remise' in fields and fields['Grille de remise']:
-        grille_id = fields['Grille de remise'][0]
-        try:
-            grille_record = grilles_table.get(grille_id)
-            grille = parse_grille(grille_record)
-            
-            # Vérifier que la grille est active
-            if grille['actif']:
-                log_message(f"  📊 Grille spécifique: '{grille['name']}'")
-                return grille
-            else:
-                log_message(f"  ⚠️  Grille '{grille['name']}' inactive, utilisation de la grille par défaut")
-        except Exception as e:
-            log_message(f"  ⚠️  Erreur lors de la récupération de la grille spécifique: {e}")
-    
-    # Cas 2 : Grille par défaut
-    try:
-        formula = "AND({Grille par défaut} = TRUE(), {Actif} = TRUE())"
-        grilles = grilles_table.all(formula=formula)
+        # Validation de la configuration
+        self._validate_config()
         
-        if grilles:
-            grille = parse_grille(grilles[0])
-            log_message(f"  📊 Grille par défaut: '{grille['name']}'")
-            return grille
-    except Exception as e:
-        log_message(f"  ⚠️  Erreur lors de la récupération de la grille par défaut: {e}")
-    
-    # Cas 3 : Aucune grille trouvée
-    log_message(f"  ⚠️  Aucune grille de remise trouvée")
-    return None
-
-def calculate_discount_from_grid(prix_ht, mois_factures, grille):
-    """
-    Calcule la remise selon la grille dynamique
-    
-    Args:
-        prix_ht: Prix mensuel HT (prix plein avant remise)
-        mois_factures: Nombre de mois déjà facturés
-        grille: Dictionnaire de la grille de remise ou None
-        
-    Returns:
-        dict: {
-            'discount_pct': % de remise,
-            'discount_amount_ht': Montant de la remise en €,
-            'discount_label': Label pour la ligne de remise,
-            'final_amount_ht': Montant final après remise
-        }
-    """
-    if not grille:
-        return {
-            'discount_pct': 0,
-            'discount_amount_ht': 0,
-            'discount_label': None,
-            'final_amount_ht': prix_ht
-        }
-    
-    # Déterminer l'année et récupérer la remise correspondante
-    if mois_factures < 12:  # Année 1
-        discount_pct = grille['annee_1_pct']
-        discount_label = f"{grille['label_annee_1']} (-{discount_pct}%)" if discount_pct > 0 else None
-    elif mois_factures < 24:  # Année 2
-        discount_pct = grille['annee_2_pct']
-        discount_label = f"{grille['label_annee_2']} (-{discount_pct}%)" if discount_pct > 0 else None
-    else:  # Année 3+
-        discount_pct = grille['annee_3_pct']
-        discount_label = f"{grille['label_annee_3']} (-{discount_pct}%)" if discount_pct > 0 else None
-    
-    discount_amount_ht = prix_ht * (discount_pct / 100)
-    final_amount_ht = prix_ht - discount_amount_ht
-    
-    return {
-        'discount_pct': discount_pct,
-        'discount_amount_ht': round(discount_amount_ht, 2),
-        'discount_label': discount_label,
-        'final_amount_ht': round(final_amount_ht, 2)
-    }
-
-def is_billing_due(date_debut, mois_factures):
-    """
-    Vérifie si une facture doit être créée aujourd'hui
-    
-    Logique simple : Le jour du mois de la date de début = jour de facturation
-    Exemple : Abonnement commencé le 15 mai → Facturation tous les 15 du mois
-    
-    Args:
-        date_debut: Date de début de l'abonnement (string ISO ou datetime)
-        mois_factures: Nombre de mois déjà facturés
-        
-    Returns:
-        bool: True si la facturation est due aujourd'hui
-    """
-    if not date_debut:
-        return False
-    
-    # Convertir la date de début en date
-    if isinstance(date_debut, str):
-        date_debut = datetime.fromisoformat(date_debut.replace('Z', '+00:00')).date()
-    elif isinstance(date_debut, datetime):
-        date_debut = date_debut.date()
-    
-    today = date.today()
-    
-    # Vérifier si on est le bon jour du mois
-    jour_facturation = date_debut.day
-    
-    if today.day != jour_facturation:
-        log_message(f"  📅 Pas le jour de facturation (le {jour_facturation} de chaque mois, aujourd'hui le {today.day})")
-        return False
-    
-    # Calculer combien de mois se sont écoulés depuis le début
-    mois_ecoules = (today.year - date_debut.year) * 12 + (today.month - date_debut.month)
-    
-    # On facture si on n'a pas encore facturé tous les mois écoulés
-    if mois_factures <= mois_ecoules:
-        log_message(f"  📅 Date début: {date_debut}, Mois écoulés: {mois_ecoules}, "
-                    f"Mois facturés: {mois_factures}, Aujourd'hui: {today}")
-        log_message(f"  ✅ Facturation du mois {mois_factures + 1}")
-        return True
-    else:
-        log_message(f"  📅 Déjà à jour (mois facturés: {mois_factures}, mois écoulés: {mois_ecoules})")
-        return False
-
-def create_subscription_invoice(sellsy_client, grilles_table, airtable_record):
-    """
-    Crée une facture d'abonnement dans Sellsy avec remise selon grille
-    
-    Args:
-        sellsy_client: Instance de SellsyClient
-        grilles_table: Instance de la table grilles_remise
-        airtable_record: Enregistrement Airtable de l'abonnement
-        
-    Returns:
-        dict: Réponse de l'API Sellsy ou None si échec
-    """
-    fields = airtable_record['fields']
-    record_id = airtable_record['id']
-    
-    # Récupération des données
-    nom_service = fields.get('Nom du service', 'Service sans nom')
-    client_id = fields.get('ID_Sellsy_abonné')
-    item_id = fields.get('ID Sellsy')
-    prix_ht = fields.get('Prix HT')
-    taux_tva = fields.get('Taux TVA', 20)
-    mois_factures = fields.get('Mois facturés', 0)
-    appliquer_remise = fields.get('Appliquer remise dégressive', False)
-    
-    # Validation des données obligatoires
-    if not all([client_id, item_id, prix_ht]):
-        log_message(f"  ⚠️ Données manquantes pour {nom_service}")
-        return None
-    
-    # Récupération de la grille de remise si activée
-    grille = None
-    if appliquer_remise:
-        grille = get_discount_grid(grilles_table, airtable_record)
-    else:
-        log_message(f"  ℹ️  Remise désactivée pour cet abonnement")
-    
-    # Calcul de la remise selon la grille
-    discount_data = calculate_discount_from_grid(prix_ht, mois_factures, grille)
-    
-    log_message(f"  💰 Prix HT: {prix_ht}€ | Remise: {discount_data['discount_pct']}% | "
-                f"Final: {discount_data['final_amount_ht']}€")
-    
-    # Mode dry-run : afficher ce qui serait fait sans créer
-    if DRY_RUN:
-        log_message(f"  🧪 MODE DRY-RUN: Facture non créée (test uniquement)")
-        log_message(f"     - Client ID: {client_id}")
-        log_message(f"     - Produit ID: {item_id}")
-        log_message(f"     - Montant final: {discount_data['final_amount_ht']}€ HT")
-        if discount_data['discount_label']:
-            log_message(f"     - Remise: {discount_data['discount_label']}")
-        return {'success': True, 'invoice_id': 'DRY_RUN_TEST', 'dry_run': True}
-    
-    # Construction des lignes de la facture
-    rows = [
-        {
-            'itemid': item_id,  # Produit catalogue (prix + TVA auto)
-            'qt': 1
-        }
-    ]
-    
-    # Ajouter la ligne de remise si applicable
-    if discount_data['discount_pct'] > 0 and discount_data['discount_label']:
-        rows.append({
-            'name': discount_data['discount_label'],
-            'unitAmount': -discount_data['discount_amount_ht'],  # Montant négatif
-            'qt': 1,
-            'taxrate': taux_tva
-        })
-    
-    # Construction du payload Sellsy
-    today_str = datetime.now().strftime('%Y-%m-%d')
-    subject = f"Abonnement SunLib - Mois {mois_factures + 1}"
-    
-    # Appel API Sellsy
-    try:
-        log_message(f"  📤 Envoi de la facture à Sellsy...")
-        response = sellsy_client.create_invoice(
-            client_id=client_id,
-            item_id=item_id,
-            rows=rows,
-            subject=subject,
-            displayed_date=today_str
+        # Initialisation des clients
+        self.airtable = AirtableClient(
+            api_key=os.getenv('AIRTABLE_API_KEY'),
+            base_id=os.getenv('AIRTABLE_BASE_ID'),
+            table_services=os.getenv('AIRTABLE_TABLE_NAME', 'service_sellsy'),
+            table_grilles=os.getenv('AIRTABLE_TABLE_GRILLES', 'grilles_remise')
         )
         
-        if response:
-            invoice_id = response.get('docid') or response.get('doc_id')
-            log_message(f"  ✅ Facture créée avec succès - ID Sellsy: {invoice_id}")
-            return {
-                'success': True,
-                'invoice_id': invoice_id,
-                'response': response
-            }
+        # ✅ CORRECTION: Passer les credentials OAuth à SellsyClient
+        self.sellsy = SellsyClient(
+            consumer_token=os.getenv('SELLSY_CONSUMER_TOKEN'),
+            consumer_secret=os.getenv('SELLSY_CONSUMER_SECRET'),
+            user_token=os.getenv('SELLSY_USER_TOKEN'),
+            user_secret=os.getenv('SELLSY_USER_SECRET')
+        )
+        
+        # Cache pour la grille par défaut
+        self._default_grid: Optional[Dict] = None
+    
+    def _validate_config(self):
+        """Valide que toutes les variables d'environnement sont présentes"""
+        required_vars = [
+            'AIRTABLE_API_KEY',
+            'AIRTABLE_BASE_ID',
+            'AIRTABLE_TABLE_NAME',
+            'SELLSY_CONSUMER_TOKEN',
+            'SELLSY_CONSUMER_SECRET',
+            'SELLSY_USER_TOKEN',
+            'SELLSY_USER_SECRET'
+        ]
+        
+        missing = [var for var in required_vars if not os.getenv(var)]
+        
+        if missing:
+            raise ValueError(f"Variables d'environnement manquantes: {', '.join(missing)}")
+        
+        logger.info("✅ Configuration validée avec succès")
+        logger.info(f"📊 Base Airtable: {os.getenv('AIRTABLE_BASE_ID')[:10]}***")
+        logger.info(f"📋 Table services: {os.getenv('AIRTABLE_TABLE_NAME')}")
+        logger.info(f"📊 Table grilles: {os.getenv('AIRTABLE_TABLE_GRILLES', 'grilles_remise')}")
+    
+    def get_default_discount_grid(self) -> Dict:
+        """
+        Récupère la grille de remise par défaut depuis Airtable
+        Utilise un cache pour éviter les appels répétés
+        
+        Returns:
+            Dictionnaire contenant les pourcentages de remise par année
+            
+        Raises:
+            Exception: Si aucune grille par défaut n'est trouvée
+        """
+        if self._default_grid:
+            return self._default_grid
+        
+        grids = self.airtable.get_discount_grids()
+        
+        for grid in grids:
+            if grid.get('Par défaut', False):
+                self._default_grid = grid
+                return grid
+        
+        raise Exception("❌ Aucune grille de remise par défaut n'est définie dans Airtable")
+    
+    def calculate_discount(self, mois_ecoules: int, grid: Dict) -> float:
+        """
+        Calcule le pourcentage de remise selon le mois écoulé et la grille
+        
+        Args:
+            mois_ecoules: Nombre de mois écoulés depuis le début
+            grid: Grille de remise (dict avec Année 1, 2, 3+)
+            
+        Returns:
+            Pourcentage de remise (0-100)
+        """
+        if mois_ecoules <= 12:
+            return grid.get('Remise année 1', 0)
+        elif mois_ecoules <= 24:
+            return grid.get('Remise année 2', 0)
         else:
-            log_message(f"  ❌ Échec de création de la facture")
-            return None
+            return grid.get('Remise année 3+', 0)
     
-    except Exception as e:
-        log_message(f"  ❌ Erreur lors de la création de la facture: {e}")
-        return None
-
-def update_airtable_counters(airtable_client, record_id, invoice_id=None):
-    """
-    Met à jour les compteurs dans Airtable après création de facture
-    
-    Args:
-        airtable_client: Instance d'AirtableClient
-        record_id: ID de l'enregistrement Airtable
-        invoice_id: ID de la facture créée dans Sellsy
-    """
-    try:
-        result = airtable_client.update_counters(record_id, invoice_id)
-        fields = result['fields']
+    def process_single_subscription(self, service: Dict) -> bool:
+        """
+        Traite un abonnement individuel
         
-        log_message(f"  ✅ Compteurs mis à jour: Mois facturés = {fields['Mois facturés']}, "
-                   f"Occurrences restantes = {fields['Occurrences restantes']}")
-    
-    except Exception as e:
-        log_message(f"  ⚠️ Erreur lors de la mise à jour des compteurs: {e}")
-
-def process_subscription_invoices():
-    """
-    Traite tous les abonnements éligibles pour facturation
-    
-    Critères d'éligibilité :
-    - Date de début remplie et dans le passé
-    - Occurrences restantes > 0
-    - Jour du mois = jour anniversaire (ex: tous les 15 du mois)
-    - Mois facturés <= Mois écoulés (rattrapage automatique)
-    """
-    log_message("="*70)
-    log_message("DÉMARRAGE DE LA SYNCHRONISATION DES FACTURES D'ABONNEMENT V2.0")
-    log_message("="*70)
-    
-    # Valider la configuration
-    try:
-        validate_config()
-    except ValueError as e:
-        log_message(f"❌ ERREUR DE CONFIGURATION: {e}")
-        sys.exit(1)
-    
-    try:
-        # Initialiser les clients
-        airtable_client = AirtableClient()
-        sellsy_client = SellsyClient()
-        grilles_table = get_grilles_table()
-        
-        log_message("✅ Connexion aux services établie")
-        
-        # Récupérer tous les abonnements actifs
-        log_message("📊 Récupération des abonnements actifs depuis Airtable...")
-        records = airtable_client.get_active_subscriptions()
-        
-        log_message(f"📋 Nombre d'abonnements actifs trouvés: {len(records)}")
-        
-        if not records:
-            log_message("✅ Aucun abonnement à facturer aujourd'hui")
-            return
-        
-        # Traiter chaque abonnement
-        success_count = 0
-        skipped_count = 0
-        error_count = 0
-        
-        for record in records:
-            fields = record['fields']
-            nom_service = fields.get('Nom du service', 'Service sans nom')
+        Args:
+            service: Dictionnaire contenant les données du service Airtable
+            
+        Returns:
+            True si la facture a été créée avec succès, False sinon
+        """
+        try:
+            record_id = service['id']
+            fields = service['fields']
+            
+            # Extraction des données
+            service_name = fields.get('Nom du service', 'Service')
+            client_id = fields.get('ID client Sellsy')
+            product_id = fields.get('ID Produit Sellsy')
+            prix_ht = fields.get('Prix HT', 0)
             date_debut = fields.get('Date de début')
             mois_factures = fields.get('Mois facturés', 0)
+            occurrences_restantes = fields.get('Occurrences restantes', 0)
             
-            log_message(f"\n{'='*70}")
-            log_message(f"📋 Traitement: {nom_service}")
-            log_message(f"{'='*70}")
+            # Validation des données essentielles
+            if not all([client_id, product_id, date_debut, prix_ht > 0]):
+                logger.warning(f"⚠️  Données incomplètes pour {service_name}")
+                return False
             
-            # Vérifier si la facturation est due aujourd'hui
-            if not is_billing_due(date_debut, mois_factures):
-                skipped_count += 1
-                continue
+            # Calcul des mois écoulés
+            date_debut_obj = datetime.strptime(date_debut, '%Y-%m-%d')
+            aujourd_hui = datetime.now()
+            mois_ecoules = (aujourd_hui.year - date_debut_obj.year) * 12 + \
+                          (aujourd_hui.month - date_debut_obj.month)
             
-            # Créer la facture
-            log_message(f"  🚀 Création de la facture...")
-            result = create_subscription_invoice(sellsy_client, grilles_table, record)
+            logger.info(f"📋 Traitement: {service_name}")
+            logger.info("=" * 70)
+            logger.info(f"  📅 Date début: {date_debut}, Mois écoulés: {mois_ecoules}, "
+                       f"Mois facturés: {mois_factures}, Aujourd'hui: {aujourd_hui.strftime('%Y-%m-%d')}")
             
-            if result and result.get('success'):
-                # Mettre à jour les compteurs dans Airtable (sauf en dry-run)
-                if not result.get('dry_run'):
-                    update_airtable_counters(
-                        airtable_client, 
-                        record['id'], 
-                        result.get('invoice_id')
-                    )
-                success_count += 1
+            # Vérifier si une facturation est due
+            if mois_ecoules <= mois_factures:
+                logger.info(f"  ⏭️  Pas de facturation due (mois écoulés: {mois_ecoules} ≤ mois facturés: {mois_factures})")
+                return False
+            
+            logger.info(f"  ✅ Facturation du mois {mois_factures + 1}")
+            logger.info(f"  🚀 Création de la facture...")
+            
+            # Récupération de la grille de remise
+            grille_id = fields.get('Grille de remise')
+            if grille_id and len(grille_id) > 0:
+                # Grille spécifique liée
+                grille = self.airtable.get_discount_grid(grille_id[0])
+                logger.info(f"  📊 Grille spécifique: '{grille.get('Nom', 'N/A')}'")
             else:
-                log_message(f"  ❌ Échec de la création de la facture")
-                error_count += 1
+                # Grille par défaut
+                grille = self.get_default_discount_grid()
+                logger.info(f"  📊 Grille par défaut: '{grille.get('Nom', 'N/A')}'")
             
-            # Pause pour éviter de surcharger les APIs
-            time.sleep(1)
-        
-        # Résumé final
-        log_message(f"\n{'='*70}")
-        log_message("RÉSUMÉ DE LA SYNCHRONISATION")
-        log_message(f"{'='*70}")
-        log_message(f"✅ Factures créées avec succès: {success_count}")
-        log_message(f"⏭️  Abonnements ignorés (pas le bon jour): {skipped_count}")
-        log_message(f"❌ Échecs: {error_count}")
-        log_message(f"{'='*70}\n")
+            # Calcul de la remise
+            appliquer_remise = fields.get('Appliquer remise dégressive', True)
+            if appliquer_remise:
+                remise_pct = self.calculate_discount(mois_factures + 1, grille)
+                montant_remise = round(prix_ht * (remise_pct / 100), 2)
+                prix_final = round(prix_ht - montant_remise, 2)
+                
+                # Construction du libellé de remise
+                nom_grille = grille.get('Nom', 'Offre')
+                libelle_remise = f"🎉 {nom_grille} (-{int(remise_pct)}%)"
+            else:
+                remise_pct = 0
+                montant_remise = 0
+                prix_final = prix_ht
+                libelle_remise = ""
+            
+            logger.info(f"  💰 Prix HT: {prix_ht}€ | Remise: {remise_pct}% | Final: {prix_final}€")
+            
+            # Mode dry-run : simulation uniquement
+            if self.dry_run:
+                logger.info(f"  🧪 MODE DRY-RUN: Facture non créée (test uniquement)")
+                logger.info(f"     - Client ID: {client_id}")
+                logger.info(f"     - Produit ID: {product_id}")
+                logger.info(f"     - Montant final: {prix_final}€ HT")
+                logger.info(f"     - Remise: {libelle_remise}")
+                return True
+            
+            # Création de la facture dans Sellsy
+            logger.info(f"  📤 Envoi de la facture à Sellsy...")
+            result = self.sellsy.create_invoice(
+                client_id=str(client_id),
+                product_id=str(product_id),
+                prix_ht=prix_ht,
+                remise_pct=remise_pct,
+                libelle_remise=libelle_remise,
+                service_name=service_name
+            )
+            
+            invoice_id = result.get('invoice_id')
+            logger.info(f"  ✅ Facture créée dans Sellsy ! (ID: {invoice_id})")
+            
+            # Mise à jour des compteurs dans Airtable
+            nouveau_mois_factures = mois_factures + 1
+            nouvelles_occurrences = max(0, occurrences_restantes - 1)
+            
+            self.airtable.update_service_counters(
+                record_id=record_id,
+                mois_factures=nouveau_mois_factures,
+                occurrences_restantes=nouvelles_occurrences
+            )
+            
+            logger.info(f"  ✅ Compteurs mis à jour dans Airtable")
+            logger.info(f"     - Mois facturés: {mois_factures} → {nouveau_mois_factures}")
+            logger.info(f"     - Occurrences restantes: {occurrences_restantes} → {nouvelles_occurrences}")
+            
+            return True
+            
+        except Exception as e:
+            logger.error(f"  ❌ Échec de la création de la facture")
+            logger.error(f"  ❌ {str(e)}")
+            return False
     
+    def run(self):
+        """Point d'entrée principal : traite tous les abonnements éligibles"""
+        try:
+            logger.info("=" * 70)
+            logger.info("DÉMARRAGE DE LA SYNCHRONISATION DES FACTURES D'ABONNEMENT V2.0")
+            logger.info("=" * 70)
+            
+            # Récupération des abonnements éligibles
+            services = self.airtable.get_eligible_subscriptions()
+            
+            if not services:
+                logger.info("ℹ️  Aucun abonnement éligible à facturer aujourd'hui")
+                return
+            
+            logger.info(f"📊 {len(services)} abonnement(s) éligible(s) trouvé(s)")
+            logger.info("")
+            
+            # Traitement de chaque abonnement
+            success_count = 0
+            error_count = 0
+            
+            for service in services:
+                try:
+                    if self.process_single_subscription(service):
+                        success_count += 1
+                    logger.info("")  # Ligne vide entre les abonnements
+                    
+                except Exception as e:
+                    error_count += 1
+                    logger.error(f"❌ Erreur: {str(e)}")
+                    logger.info("")
+            
+            # Résumé
+            logger.info("=" * 70)
+            logger.info("RÉSUMÉ DE LA SYNCHRONISATION")
+            logger.info("=" * 70)
+            logger.info(f"✅ Succès: {success_count}")
+            logger.info(f"❌ Échecs: {error_count}")
+            logger.info(f"📊 Total traité: {len(services)}")
+            
+            if self.dry_run:
+                logger.info("🧪 Mode DRY-RUN: Aucune modification réelle effectuée")
+            
+        except Exception as e:
+            logger.error(f"❌ ERREUR CRITIQUE: {str(e)}")
+            raise
+
+
+def main():
+    """Point d'entrée du script"""
+    # Lecture du mode dry-run depuis les variables d'environnement
+    dry_run_env = os.getenv('DRY_RUN', 'false').lower()
+    dry_run = dry_run_env in ['true', '1', 'yes']
+    
+    logger.info(f"🎯 Démarrage de la synchronisation...")
+    logger.info(f"📅 Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    logger.info(f"🔧 Mode: {'PRODUCTION' if not dry_run else 'TEST (DRY-RUN)'}")
+    logger.info("")
+    
+    try:
+        sync = SubscriptionInvoiceSync(dry_run=dry_run)
+        sync.run()
+        
+        logger.info("")
+        logger.info("🎉 Synchronisation terminée avec succès !")
+        sys.exit(0)
+        
     except Exception as e:
-        log_message(f"❌ ERREUR CRITIQUE: {e}")
+        logger.error(f"❌ ERREUR FATALE: {str(e)}")
         import traceback
         traceback.print_exc()
         sys.exit(1)
 
-def main():
-    """Fonction principale"""
-    process_subscription_invoices()
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()
