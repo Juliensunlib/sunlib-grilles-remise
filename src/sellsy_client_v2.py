@@ -173,8 +173,10 @@ class SellsyClientV2:
         prix_final = round(prix_ht - montant_remise, 2)
         
         # Construction des lignes de facture (rows dans Sellsy v2)
+        # Type "single" = Single Row (ligne simple de facturation)
         rows = [
             {
+                "type": "single",
                 "label": service_name,
                 "unit_amount": prix_ht,
                 "quantity": 1,
@@ -185,6 +187,7 @@ class SellsyClientV2:
         # Ligne de remise si applicable
         if remise_pct > 0 and montant_remise > 0:
             rows.append({
+                "type": "single",
                 "label": libelle_remise,
                 "unit_amount": -montant_remise,
                 "quantity": 1,
