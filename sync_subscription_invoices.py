@@ -174,29 +174,40 @@ class SubscriptionInvoiceSync:
             
             logger.info(f"  ✅ Facturation du mois {mois_factures + 1}")
             logger.info(f"  🚀 Création de la facture...")
-            
-            # Récupération de la grille de remise
-            grille_id = fields.get('Grille de remise')
-            if grille_id and len(grille_id) > 0:
-                # Grille spécifique liée
-                grille = self.airtable.get_discount_grid(grille_id[0])
-                logger.info(f"  📊 Grille spécifique: '{grille.get('Nom', 'N/A')}'")
-            else:
-                # Grille par défaut
-                grille = self.get_default_discount_grid()
-                logger.info(f"  📊 Grille par défaut: '{grille.get('Nom', 'N/A')}'")
-            
-            # Calcul de la remise
+
+            # Calcul de la remise (optionnel)
             appliquer_remise = fields.get('Appliquer remise dégressive', True)
+
             if appliquer_remise:
-                remise_pct = self.calculate_discount(mois_factures + 1, grille)
-                montant_remise = round(prix_ht * (remise_pct / 100), 2)
-                prix_final = round(prix_ht - montant_remise, 2)
-                
-                # Construction du libellé de remise
-                nom_grille = grille.get('Nom', 'Offre')
-                libelle_remise = f"🎉 {nom_grille} (-{int(remise_pct)}%)"
+                # Récupération de la grille de remise uniquement si nécessaire
+                try:
+                    grille_id = fields.get('Grille de remise')
+                    if grille_id and len(grille_id) > 0:
+                        # Grille spécifique liée
+                        grille = self.airtable.get_discount_grid(grille_id[0])
+                        logger.info(f"  📊 Grille spécifique: '{grille.get('Nom', 'N/A')}'")
+                    else:
+                        # Grille par défaut
+                        grille = self.get_default_discount_grid()
+                        logger.info(f"  📊 Grille par défaut: '{grille.get('Nom', 'N/A')}'")
+
+                    remise_pct = self.calculate_discount(mois_factures + 1, grille)
+                    montant_remise = round(prix_ht * (remise_pct / 100), 2)
+                    prix_final = round(prix_ht - montant_remise, 2)
+
+                    # Construction du libellé de remise
+                    nom_grille = grille.get('Nom', 'Offre')
+                    libelle_remise = f"🎉 {nom_grille} (-{int(remise_pct)}%)"
+
+                except Exception as e:
+                    logger.warning(f"  ⚠️  Impossible de récupérer la grille de remise: {str(e)}")
+                    logger.warning(f"  ⚠️  Facture créée sans remise")
+                    remise_pct = 0
+                    montant_remise = 0
+                    prix_final = prix_ht
+                    libelle_remise = ""
             else:
+                logger.info(f"  📊 Remise désactivée pour cet abonnement")
                 remise_pct = 0
                 montant_remise = 0
                 prix_final = prix_ht
