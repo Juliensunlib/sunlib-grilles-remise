@@ -6,6 +6,7 @@ Gère l'authentification OAuth 1.0 et la création de factures avec remises dyna
 import os
 import hashlib
 import time
+import json
 from datetime import datetime
 from typing import Dict, List, Optional, Any
 import requests
@@ -53,20 +54,22 @@ class SellsyClient:
         Raises:
             Exception: Si l'API retourne une erreur
         """
+        # Construction du payload avec do_in encodé en JSON string
         payload = {
             'request': '1',
             'io_mode': 'json',
-            'do_in': {
+            'do_in': json.dumps({
                 'method': method,
                 'params': params
-            }
+            })
         }
         
+        # Envoi en form-data (pas en JSON)
         response = requests.post(
             self.api_url,
             auth=self.auth,
-            json=payload,
-            headers={'Content-Type': 'application/json'}
+            data=payload,  # ← data au lieu de json
+            headers={'Content-Type': 'application/x-www-form-urlencoded'}
         )
         
         data = response.json()
