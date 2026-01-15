@@ -175,31 +175,27 @@ class SellsyClientV2:
         # Construction des lignes de facture (rows dans Sellsy v2)
         rows = [
             {
-                "type": "standard",
                 "label": service_name,
                 "unit_amount": prix_ht,
                 "quantity": 1,
-                "tax_id": tva_id,
-                "unit": "mois"
+                "tax_id": tva_id
             }
         ]
         
         # Ligne de remise si applicable
         if remise_pct > 0 and montant_remise > 0:
             rows.append({
-                "type": "standard",
                 "label": libelle_remise,
                 "unit_amount": -montant_remise,
                 "quantity": 1,
                 "tax_id": tva_id
             })
         
-        # ✅ FIX FINAL : Structure correcte selon documentation Sellsy v2
-        # "related" est un TABLEAU d'objets avec type + id
+        # Structure correcte selon documentation Sellsy v2
         invoice_data = {
             "related": [
                 {
-                    "type": "company",  # Ou "individual" pour particulier
+                    "type": "company",
                     "id": int(client_id)
                 }
             ],
