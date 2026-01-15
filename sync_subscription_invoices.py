@@ -12,7 +12,7 @@ import logging
 
 # Import des clients
 from src.airtable_client import AirtableClient
-from src.sellsy_client import SellsyClient
+from src.sellsy_client_v2 import SellsyClientV2
 
 # Configuration du logging
 logging.basicConfig(
@@ -46,12 +46,10 @@ class SubscriptionInvoiceSync:
             table_grilles=os.getenv('AIRTABLE_TABLE_GRILLES', 'grilles_remise')
         )
         
-        # ✅ CORRECTION: Passer les credentials OAuth à SellsyClient
-        self.sellsy = SellsyClient(
-            consumer_token=os.getenv('SELLSY_CONSUMER_TOKEN'),
-            consumer_secret=os.getenv('SELLSY_CONSUMER_SECRET'),
-            user_token=os.getenv('SELLSY_USER_TOKEN'),
-            user_secret=os.getenv('SELLSY_USER_SECRET')
+        # ✅ Nouveau client Sellsy v2 avec OAuth2
+        self.sellsy = SellsyClientV2(
+            client_id=os.getenv('SELLSY_V2_CLIENT_ID'),
+            client_secret=os.getenv('SELLSY_V2_CLIENT_SECRET')
         )
         
         # Cache pour la grille par défaut
@@ -63,10 +61,8 @@ class SubscriptionInvoiceSync:
             'AIRTABLE_API_KEY',
             'AIRTABLE_BASE_ID',
             'AIRTABLE_TABLE_NAME',
-            'SELLSY_CONSUMER_TOKEN',
-            'SELLSY_CONSUMER_SECRET',
-            'SELLSY_USER_TOKEN',
-            'SELLSY_USER_SECRET'
+            'SELLSY_V2_CLIENT_ID',
+            'SELLSY_V2_CLIENT_SECRET'
         ]
         
         missing = [var for var in required_vars if not os.getenv(var)]
@@ -78,6 +74,7 @@ class SubscriptionInvoiceSync:
         logger.info(f"📊 Base Airtable: {os.getenv('AIRTABLE_BASE_ID')[:10]}***")
         logger.info(f"📋 Table services: {os.getenv('AIRTABLE_TABLE_NAME')}")
         logger.info(f"📊 Table grilles: {os.getenv('AIRTABLE_TABLE_GRILLES', 'grilles_remise')}")
+        logger.info(f"🔐 Sellsy API: v2 (OAuth2)")
     
     def get_default_discount_grid(self) -> Dict:
         """
@@ -217,7 +214,7 @@ class SubscriptionInvoiceSync:
                 return True
             
             # Création de la facture dans Sellsy
-            logger.info(f"  📤 Envoi de la facture à Sellsy...")
+            logger.info(f"  📤 Envoi de la facture à Sellsy v2...")
             result = self.sellsy.create_invoice(
                 client_id=str(client_id),
                 product_id=str(product_id),
