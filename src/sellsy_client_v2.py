@@ -172,10 +172,9 @@ class SellsyClientV2:
         montant_remise = round(prix_ht * (remise_pct / 100), 2)
         prix_final = round(prix_ht - montant_remise, 2)
         
-        # ✅ Construction des lignes - type "item" pour article catalogue, "free" pour ligne libre
+        # ✅ Construction des lignes SANS champ "type" (v2 ne l'accepte pas)
         rows = [
             {
-                "type": "item",
                 "related": {
                     "type": "item",
                     "id": int(product_id)
@@ -186,10 +185,9 @@ class SellsyClientV2:
             }
         ]
 
-        # Ligne de remise si applicable (ligne libre)
+        # Ligne de remise si applicable (ligne libre sans "type")
         if remise_pct > 0 and montant_remise > 0:
             rows.append({
-                "type": "free",
                 "label": libelle_remise,
                 "unit_amount": str(-montant_remise),
                 "quantity": 1,
