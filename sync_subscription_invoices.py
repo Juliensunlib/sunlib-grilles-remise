@@ -158,7 +158,10 @@ def calculate_discount_from_grid(prix_ht, mois_factures, grille):
 
 def is_billing_due(date_debut, mois_factures):
     """
-    Vérifie si une facture doit être créée aujourd'hui (date anniversaire)
+    Vérifie si une facture doit être créée aujourd'hui
+    
+    Logique simple : Le jour du mois de la date de début = jour de facturation
+    Exemple : Abonnement commencé le 15 mai → Facturation tous les 15 du mois
     
     Args:
         date_debut: Date de début de l'abonnement (string ISO ou datetime)
@@ -170,22 +173,33 @@ def is_billing_due(date_debut, mois_factures):
     if not date_debut:
         return False
     
-    # Convertir la date de début en datetime si c'est une string
+    # Convertir la date de début en date
     if isinstance(date_debut, str):
         date_debut = datetime.fromisoformat(date_debut.replace('Z', '+00:00')).date()
     elif isinstance(date_debut, datetime):
         date_debut = date_debut.date()
     
-    # Calculer la date anniversaire du prochain mois à facturer
-    date_anniversaire = date_debut + relativedelta(months=mois_factures)
-    
-    # Vérifier si c'est aujourd'hui
     today = date.today()
     
-    log_message(f"  📅 Date début: {date_debut}, Mois facturés: {mois_factures}, "
-                f"Date anniversaire: {date_anniversaire}, Aujourd'hui: {today}")
+    # Vérifier si on est le bon jour du mois
+    jour_facturation = date_debut.day
     
-    return date_anniversaire == today
+    if today.day != jour_facturation:
+        log_message(f"  📅 Pas le jour de facturation (le {jour_facturation} de chaque mois, aujourd'hui le {today.day})")
+        return False
+    
+    # Calculer combien de mois se sont écoulés depuis le début
+    mois_ecoules = (today.year - date_debut.year) * 12 + (today.month - date_debut.month)
+    
+    # On facture si on n'a pas encore facturé tous les mois écoulés
+    if mois_factures <= mois_ecoules:
+        log_message(f"  📅 Date début: {date_debut}, Mois écoulés: {mois_ecoules}, "
+                    f"Mois facturés: {mois_factures}, Aujourd'hui: {today}")
+        log_message(f"  ✅ Facturation du mois {mois_factures + 1}")
+        return True
+    else:
+        log_message(f"  📅 Déjà à jour (mois facturés: {mois_factures}, mois écoulés: {mois_ecoules})")
+        return False
 
 def create_subscription_invoice(sellsy_client, grilles_table, airtable_record):
     """
@@ -313,7 +327,8 @@ def process_subscription_invoices():
     Critères d'éligibilité :
     - Date de début remplie et dans le passé
     - Occurrences restantes > 0
-    - Date anniversaire = aujourd'hui
+    - Jour du mois = jour anniversaire (ex: tous les 15 du mois)
+    - Mois facturés <= Mois écoulés (rattrapage automatique)
     """
     log_message("="*70)
     log_message("DÉMARRAGE DE LA SYNCHRONISATION DES FACTURES D'ABONNEMENT V2.0")
@@ -361,7 +376,6 @@ def process_subscription_invoices():
             
             # Vérifier si la facturation est due aujourd'hui
             if not is_billing_due(date_debut, mois_factures):
-                log_message(f"  ⏭️  Pas de facturation aujourd'hui (date anniversaire différente)")
                 skipped_count += 1
                 continue
             
@@ -390,7 +404,7 @@ def process_subscription_invoices():
         log_message("RÉSUMÉ DE LA SYNCHRONISATION")
         log_message(f"{'='*70}")
         log_message(f"✅ Factures créées avec succès: {success_count}")
-        log_message(f"⏭️  Abonnements ignorés (pas aujourd'hui): {skipped_count}")
+        log_message(f"⏭️  Abonnements ignorés (pas le bon jour): {skipped_count}")
         log_message(f"❌ Échecs: {error_count}")
         log_message(f"{'='*70}\n")
     
