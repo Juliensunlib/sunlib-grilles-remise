@@ -216,8 +216,8 @@ class SubscriptionInvoiceSync:
             # Création de la facture dans Sellsy
             logger.info(f"  📤 Envoi de la facture à Sellsy v2...")
             result = self.sellsy.create_invoice(
-                client_id=str(client_id),
-                product_id=str(product_id),
+                client_id=int(client_id),
+                product_id=int(product_id),
                 prix_ht=prix_ht,
                 remise_pct=remise_pct,
                 libelle_remise=libelle_remise,
