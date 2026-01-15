@@ -1,81 +1,64 @@
-name: 🧪 Sync Subscription Invoices - SANDBOX
+name: Sync Subscription Invoices
 
 on:
-  # Déclenchement manuel pour les tests
+  schedule:
+    # Tous les jours à 3h du matin (UTC)
+    - cron: '0 3 * * *'
+  
   workflow_dispatch:
     inputs:
       dry_run:
-        description: 'Mode test (ne crée pas réellement les factures)'
+        description: 'Mode test (dry-run)'
         required: false
         type: boolean
-        default: false
-  
-  # Déclenchement automatique quotidien à 9h UTC (10h FR hiver, 11h FR été)
-  schedule:
-    - cron: '0 9 * * *'
+        default: true
 
 jobs:
-  sync-invoices:
-    name: Synchronisation Factures Abonnement
+  sync:
     runs-on: ubuntu-latest
     
     steps:
-      - name: 📥 Checkout du code
+      - name: Checkout code
         uses: actions/checkout@v4
       
-      - name: 🐍 Configuration Python 3.10
+      - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.10'
-          cache: 'pip'
       
-      - name: 📦 Installation des dépendances
+      - name: Install dependencies
         run: |
-          pip install --upgrade pip
+          python -m pip install --upgrade pip
           pip install -r requirements.txt
       
-      - name: 🔍 Vérification de la configuration
-        env:
-          AIRTABLE_API_KEY: ${{ secrets.AIRTABLE_API_KEY_SANDBOX }}
-          AIRTABLE_BASE_ID: ${{ secrets.AIRTABLE_BASE_ID_SANDBOX }}
-        run: |
-          echo "✅ Configuration validée"
-          echo "📊 Base Airtable: ${AIRTABLE_BASE_ID:0:10}..."
-          echo "🔑 API Key configurée: ${AIRTABLE_API_KEY:0:10}..."
-      
-      - name: 🚀 Synchronisation des factures
+      - name: Run sync
         env:
           # Airtable
-          AIRTABLE_API_KEY: ${{ secrets.AIRTABLE_API_KEY_SANDBOX }}
-          AIRTABLE_BASE_ID: ${{ secrets.AIRTABLE_BASE_ID_SANDBOX }}
-          AIRTABLE_TABLE_NAME: service_sellsy
-          AIRTABLE_GRILLES_TABLE_NAME: grilles_remise
+          AIRTABLE_API_KEY: ${{ secrets.AIRTABLE_API_KEY }}
+          AIRTABLE_BASE_ID: ${{ secrets.AIRTABLE_BASE_ID }}
+          AIRTABLE_TABLE_NAME: ${{ vars.AIRTABLE_TABLE_NAME }}
+          AIRTABLE_TABLE_GRILLES: ${{ vars.AIRTABLE_TABLE_GRILLES }}
           
-          # Sellsy OAuth
-          SELLSY_CONSUMER_TOKEN: ${{ secrets.SELLSY_CONSUMER_TOKEN_SANDBOX }}
-          SELLSY_CONSUMER_SECRET: ${{ secrets.SELLSY_CONSUMER_SECRET_SANDBOX }}
-          SELLSY_USER_TOKEN: ${{ secrets.SELLSY_USER_TOKEN_SANDBOX }}
-          SELLSY_USER_SECRET: ${{ secrets.SELLSY_USER_SECRET_SANDBOX }}
+          # Sellsy v2 (OAuth2)
+          SELLSY_V2_CLIENT_ID: ${{ secrets.SELLSY_V2_CLIENT_ID }}
+          SELLSY_V2_CLIENT_SECRET: ${{ secrets.SELLSY_V2_CLIENT_SECRET }}
+          SELLSY_GOCARDLESS_PAYMENT_ID: ${{ vars.SELLSY_GOCARDLESS_PAYMENT_ID }}
           
-          # Mode dry-run (optionnel)
-          DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
+          # Configuration
+          DRY_RUN: ${{ inputs.dry_run || vars.DRY_RUN || 'false' }}
+        
         run: |
           echo "🎯 Démarrage de la synchronisation..."
           echo "📅 Date: $(date '+%Y-%m-%d %H:%M:%S')"
-          echo "🔧 Mode: SANDBOX"
-          echo "🧪 Dry-run: $DRY_RUN"
-          echo ""
+          echo "🔧 Mode: ${{ inputs.dry_run && 'SANDBOX' || 'PRODUCTION' }}"
+          echo "🧪 Dry-run: ${DRY_RUN}"
           python sync_subscription_invoices.py
       
-      - name: 📊 Résumé de l'exécution
+      - name: Upload logs
         if: always()
-        run: |
-          echo "✅ Workflow terminé"
-          echo "📅 Date de fin: $(date '+%Y-%m-%d %H:%M:%S')"
-          echo "🔗 Logs disponibles dans les étapes précédentes"
-      
-      - name: ❌ Notification en cas d'erreur
-        if: failure()
-        run: |
-          echo "::error::❌ La synchronisation a échoué"
-          echo "::error::Vérifiez les logs ci-dessus pour plus de détails"
+        uses: actions/upload-artifact@v4
+        with:
+          name: sync-logs-${{ github.run_number }}
+          path: |
+            *.log
+          retention-days: 30
