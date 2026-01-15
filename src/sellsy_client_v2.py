@@ -126,7 +126,8 @@ class SellsyClientV2:
     def get_gocardless_payment_id(self) -> int:
         """
         Récupère l'ID du moyen de paiement GoCardless
-        Note: Peut nécessiter un endpoint spécifique v2 (à vérifier dans la doc)
+        Note: API v2 ne permet pas encore de lister les moyens de paiement
+        On utilise donc une variable d'environnement
         
         Returns:
             ID du moyen de paiement GoCardless
@@ -134,21 +135,19 @@ class SellsyClientV2:
         if self._gocardless_cache:
             return int(self._gocardless_cache)
         
-        # TODO: Vérifier l'endpoint exact pour les moyens de paiement en v2
-        # Potentiellement : GET /v2/payment-methods ou GET /v2/account-data
-        
-        # Pour l'instant, utilise un ID en dur (à récupérer manuellement)
+        # Récupération depuis variable d'environnement
         gocardless_id = os.getenv('SELLSY_GOCARDLESS_PAYMENT_ID')
         
         if not gocardless_id:
-            raise Exception("Variable SELLSY_GOCARDLESS_PAYMENT_ID manquante")
+            raise Exception("Variable SELLSY_GOCARDLESS_PAYMENT_ID manquante. "
+                          "Récupère l'ID manuellement depuis Sellsy et ajoute-le en variable GitHub.")
         
         self._gocardless_cache = gocardless_id
         return int(gocardless_id)
     
     def create_invoice(self, 
-                      company_id: int,
-                      product_id: int,
+                      client_id: str,
+                      product_id: str,
                       prix_ht: float,
                       remise_pct: float,
                       libelle_remise: str,
@@ -157,8 +156,8 @@ class SellsyClientV2:
         Crée une facture dans Sellsy via API v2
         
         Args:
-            company_id: ID de l'entreprise/client dans Sellsy
-            product_id: ID du produit (pour référence)
+            client_id: ID du client (company_id dans Sellsy)
+            product_id: ID du produit (non utilisé en v2, gardé pour compatibilité)
             prix_ht: Prix HT avant remise
             remise_pct: Pourcentage de remise
             libelle_remise: Libellé de la remise
@@ -186,7 +185,7 @@ class SellsyClientV2:
         ]
         
         # Ligne de remise si applicable
-        if remise_pct > 0:
+        if remise_pct > 0 and montant_remise > 0:
             lines.append({
                 "type": "standard",
                 "label": libelle_remise,
@@ -197,7 +196,7 @@ class SellsyClientV2:
         
         # Construction de la facture
         invoice_data = {
-            "company_id": company_id,
+            "company_id": int(client_id),
             "currency": "EUR",
             "subject": f"Abonnement mensuel - {service_name}",
             "notes": "Facture générée automatiquement",
@@ -207,12 +206,27 @@ class SellsyClientV2:
         # Appel API
         result = self._make_request('POST', '/invoices', data=invoice_data)
         
+        invoice_id = result.get('data', {}).get('id')
+        
         return {
-            'invoice_id': result.get('data', {}).get('id'),
+            'invoice_id': invoice_id,
             'montant_ht': prix_final,
             'montant_remise': montant_remise,
             'success': True
         }
+    
+    def get_client_info(self, client_id: str) -> Dict[str, Any]:
+        """
+        Récupère les informations d'un client via API v2
+        
+        Args:
+            client_id: ID du client (company)
+            
+        Returns:
+            Informations du client
+        """
+        result = self._make_request('GET', f'/companies/{client_id}')
+        return result.get('data', {})
 
 
 def test_connection_v2():
