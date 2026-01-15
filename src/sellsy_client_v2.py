@@ -160,14 +160,12 @@ class SellsyClientV2:
         montant_remise = round(prix_ht * (remise_pct / 100), 2)
         prix_final = round(prix_ht - montant_remise, 2)
 
-        # ✅ LIGNE ARTICLE CATALOGUE (SANS type)
+        # ✅ LIGNE ARTICLE CATALOGUE
         rows = [
             {
-                "related": {
-                    "type": "item",
-                    "id": product_id,
-                },
-                "unit_amount": str(prix_ht),
+                "type": "item",
+                "item_id": int(product_id),
+                "unit_amount": prix_ht,
                 "quantity": 1,
                 "tax_id": tva_id,
             }
@@ -177,8 +175,9 @@ class SellsyClientV2:
         if montant_remise > 0:
             rows.append(
                 {
+                    "type": "free",
                     "label": libelle_remise,
-                    "unit_amount": str(-montant_remise),
+                    "unit_amount": -montant_remise,
                     "quantity": 1,
                     "tax_id": tva_id,
                 }
@@ -192,11 +191,16 @@ class SellsyClientV2:
             "related": [
                 {
                     "type": "company",
-                    "id": client_id,
+                    "id": int(client_id),
                 }
             ],
             "rows": rows,
         }
+
+        # Debug
+        import json
+        print("📤 ENVOI SELLSY:")
+        print(json.dumps(invoice_data, indent=2, ensure_ascii=False))
 
         result = self._make_request("POST", "/invoices", data=invoice_data)
 
