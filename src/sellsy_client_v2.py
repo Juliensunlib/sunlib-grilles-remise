@@ -156,7 +156,7 @@ class SellsyClientV2:
         Crée une facture dans Sellsy via API v2
         
         Args:
-            client_id: ID du client (third_id dans Sellsy)
+            client_id: ID du client (company_id ou individual_id dans Sellsy)
             product_id: ID du produit (non utilisé en v2, gardé pour compatibilité)
             prix_ht: Prix HT avant remise
             remise_pct: Pourcentage de remise
@@ -172,10 +172,10 @@ class SellsyClientV2:
         montant_remise = round(prix_ht * (remise_pct / 100), 2)
         prix_final = round(prix_ht - montant_remise, 2)
         
-        # Construction des lignes de facture
-        lines = [
+        # Construction des lignes de facture (rows dans Sellsy v2)
+        rows = [
             {
-                "type": "standard",
+                "item_type": "standard",
                 "label": service_name,
                 "unit_amount": prix_ht,
                 "quantity": 1,
@@ -186,23 +186,24 @@ class SellsyClientV2:
         
         # Ligne de remise si applicable
         if remise_pct > 0 and montant_remise > 0:
-            lines.append({
-                "type": "standard",
+            rows.append({
+                "item_type": "standard",
                 "label": libelle_remise,
                 "unit_amount": -montant_remise,
                 "quantity": 1,
                 "tax_id": tva_id
             })
         
-        # ✅ FIX : Construction de la facture avec le champ "related" obligatoire
+        # ✅ FIX : Structure correcte pour Sellsy API v2
+        # Selon le changelog: "for Company & Individual, only client type is allowed"
         invoice_data = {
-            "related": {
-                "third_id": int(client_id)  # ✅ Champ obligatoire pour lier au client
+            "client": {
+                "id": int(client_id)  # ✅ Champ "client" avec sous-champ "id"
             },
             "currency": "EUR",
             "subject": f"Abonnement mensuel - {service_name}",
             "notes": "Facture générée automatiquement",
-            "lines": lines
+            "rows": rows  # ✅ "rows" et non "lines" en v2
         }
         
         # Appel API
