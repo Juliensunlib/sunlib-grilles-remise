@@ -186,9 +186,9 @@ class SellsyClientV2:
                 }
             )
 
-        # Détecter le type de client (company ou contact)
+        # Détecter le type de client (company ou individual)
         client_info = self.get_client_info(int(client_id))
-        client_type = client_info.get("_entity_type", "contact")
+        client_type = client_info.get("_entity_type", "individual")
 
         invoice_data = {
             "status": "draft",
@@ -223,7 +223,7 @@ class SellsyClientV2:
     # ---------------------------------------------------------------------
 
     def get_client_info(self, client_id: int) -> Dict[str, Any]:
-        """Récupère les informations d'un client et son type (company ou contact)"""
+        """Récupère les informations d'un client et son type (company ou individual)"""
         # Essayer d'abord en tant que company
         try:
             result = self._make_request("GET", f"/companies/{client_id}")
@@ -231,14 +231,14 @@ class SellsyClientV2:
             data["_entity_type"] = "company"
             return data
         except Exception as e:
-            # Si erreur, essayer en tant que contact
+            # Si erreur, essayer en tant que individual (particulier)
             try:
-                result = self._make_request("GET", f"/contacts/{client_id}")
+                result = self._make_request("GET", f"/individuals/{client_id}")
                 data = result.get("data", {})
-                data["_entity_type"] = "contact"
+                data["_entity_type"] = "individual"
                 return data
             except Exception as e2:
-                raise Exception(f"Client {client_id} introuvable (ni company ni contact): {e2}")
+                raise Exception(f"Client {client_id} introuvable (ni company ni individual): {e2}")
 
 
 # -------------------------------------------------------------------------
