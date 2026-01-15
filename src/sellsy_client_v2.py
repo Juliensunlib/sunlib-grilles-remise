@@ -194,16 +194,19 @@ class SellsyClientV2:
                 "tax_id": tva_id
             })
         
-        # ✅ FIX : Structure correcte pour Sellsy API v2
-        # Selon le changelog: "for Company & Individual, only client type is allowed"
+        # ✅ FIX FINAL : Structure correcte selon documentation Sellsy v2
+        # "related" est un TABLEAU d'objets avec type + id
         invoice_data = {
-            "client": {
-                "id": int(client_id)  # ✅ Champ "client" avec sous-champ "id"
-            },
+            "related": [
+                {
+                    "type": "company",  # Ou "individual" pour particulier
+                    "id": int(client_id)
+                }
+            ],
             "currency": "EUR",
             "subject": f"Abonnement mensuel - {service_name}",
-            "notes": "Facture générée automatiquement",
-            "rows": rows  # ✅ "rows" et non "lines" en v2
+            "note": "Facture générée automatiquement",
+            "rows": rows
         }
         
         # Appel API
