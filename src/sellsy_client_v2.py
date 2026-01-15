@@ -175,7 +175,7 @@ class SellsyClientV2:
         # Construction des lignes de facture (rows dans Sellsy v2)
         rows = [
             {
-                "item_type": "standard",
+                "type": "standard",
                 "label": service_name,
                 "unit_amount": prix_ht,
                 "quantity": 1,
@@ -187,7 +187,7 @@ class SellsyClientV2:
         # Ligne de remise si applicable
         if remise_pct > 0 and montant_remise > 0:
             rows.append({
-                "item_type": "standard",
+                "type": "standard",
                 "label": libelle_remise,
                 "unit_amount": -montant_remise,
                 "quantity": 1,
