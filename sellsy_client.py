@@ -1,84 +1,112 @@
 #!/usr/bin/env python3
 """
-Client Airtable pour la synchronisation des factures d'abonnement
+Client Sellsy pour la création de factures via l'API OAuth 1.0
 """
 
-from pyairtable import Table
+import json
+import requests
+from requests_oauthlib import OAuth1
 from config import (
-    AIRTABLE_API_KEY,
-    AIRTABLE_BASE_ID,
-    AIRTABLE_TABLE_NAME
+    SELLSY_CONSUMER_TOKEN,
+    SELLSY_CONSUMER_SECRET,
+    SELLSY_USER_TOKEN,
+    SELLSY_USER_SECRET
 )
 
 
-class AirtableClient:
-    """Client pour interagir avec Airtable"""
+class SellsyClient:
+    """Client pour interagir avec l'API Sellsy"""
+    
+    API_URL = "https://apifeed.sellsy.com/0/"
     
     def __init__(self):
-        """Initialise la connexion à Airtable"""
-        if not AIRTABLE_API_KEY or not AIRTABLE_BASE_ID:
-            raise ValueError("AIRTABLE_API_KEY et AIRTABLE_BASE_ID doivent être configurés")
+        """Initialise le client OAuth1 Sellsy"""
+        if not all([
+            SELLSY_CONSUMER_TOKEN,
+            SELLSY_CONSUMER_SECRET,
+            SELLSY_USER_TOKEN,
+            SELLSY_USER_SECRET
+        ]):
+            raise ValueError("Toutes les variables Sellsy OAuth doivent être configurées")
         
-        self.table = Table(AIRTABLE_API_KEY, AIRTABLE_BASE_ID, AIRTABLE_TABLE_NAME)
-    
-    def get_active_subscriptions(self):
-        """
-        Récupère tous les abonnements actifs
-        
-        Critères :
-        - Catégorie = "Abonnement"
-        - Occurrences restantes > 0
-        - Date de début remplie
-        
-        Returns:
-            list: Liste des enregistrements Airtable
-        """
-        formula = """
-        AND(
-            {Catégorie} = 'Abonnement',
-            {Occurrences restantes} > 0,
-            {Date de début} != BLANK()
+        self.auth = OAuth1(
+            SELLSY_CONSUMER_TOKEN,
+            client_secret=SELLSY_CONSUMER_SECRET,
+            resource_owner_key=SELLSY_USER_TOKEN,
+            resource_owner_secret=SELLSY_USER_SECRET,
+            signature_type='query'
         )
-        """
-        
-        return self.table.all(formula=formula)
     
-    def update_counters(self, record_id, invoice_id=None):
+    def call_api(self, method, params):
         """
-        Met à jour les compteurs après création de facture
+        Appelle l'API Sellsy
         
         Args:
-            record_id: ID de l'enregistrement Airtable
-            invoice_id: ID de la facture créée dans Sellsy (optionnel)
+            method: Méthode de l'API (ex: "Document.create")
+            params: Paramètres de la requête
         
         Returns:
-            dict: Enregistrement mis à jour
+            dict: Réponse de l'API ou None en cas d'erreur
         """
-        # Récupérer l'enregistrement actuel
-        record = self.table.get(record_id)
-        fields = record['fields']
-        
-        mois_factures = fields.get('Mois facturés', 0)
-        occurrences_restantes = fields.get('Occurrences restantes', 0)
-        
-        # Préparer les mises à jour
-        updates = {
-            'Mois facturés': mois_factures + 1,
-            'Occurrences restantes': max(0, occurrences_restantes - 1)
+        payload = {
+            'request': 1,
+            'io_mode': 'json',
+            'do_in': json.dumps({
+                'method': method,
+                'params': params
+            })
         }
         
-        if invoice_id:
-            from datetime import datetime
-            updates['Dernière synchronisation'] = datetime.now().isoformat()
+        try:
+            response = requests.post(
+                self.API_URL,
+                data=payload,
+                auth=self.auth,
+                timeout=30
+            )
+            
+            response.raise_for_status()
+            
+            result = response.json()
+            
+            if result.get('status') == 'error':
+                error_msg = result.get('error', 'Erreur inconnue')
+                print(f"❌ Erreur API Sellsy: {error_msg}")
+                return None
+            
+            return result.get('response', result)
         
-        # Appliquer les mises à jour
-        return self.table.update(record_id, updates)
-
-
-if __name__ == '__main__':
-    # Test de connexion
-    client = AirtableClient()
-    print("✅ Connexion à Airtable réussie")
+        except requests.exceptions.RequestException as e:
+            print(f"❌ Erreur de connexion à Sellsy: {e}")
+            return None
+        
+        except json.JSONDecodeError as e:
+            print(f"❌ Erreur de parsing JSON: {e}")
+            return None
     
-    subscriptions = client.get_active_subscriptions()
-    print(f"📊 {len(subscriptions)} abonnements actifs trouvés")
+    def create_invoice(self, client_id, item_id, rows, subject, displayed_date):
+        """
+        Crée une facture dans Sellsy
+        
+        Args:
+            client_id: ID du client Sellsy
+            item_id: ID du produit catalogue
+            rows: Liste des lignes de la facture
+            subject: Objet de la facture
+            displayed_date: Date d'affichage de la facture (YYYY-MM-DD)
+        
+        Returns:
+            dict: Réponse de l'API avec l'ID de la facture créée
+        """
+        params = {
+            'document': {
+                'doctype': 'invoice',
+                'thirdid': client_id,
+                'subject': subject,
+                'displayedDate': displayed_date,
+                'step': 'sent',
+                'rows': rows
+            }
+        }
+        
+        return self.call_api('Document.create', params)
