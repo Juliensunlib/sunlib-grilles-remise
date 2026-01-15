@@ -171,7 +171,13 @@ class SubscriptionInvoiceSync:
             if mois_ecoules <= mois_factures:
                 logger.info(f"  ⏭️  Pas de facturation due (mois écoulés: {mois_ecoules} ≤ mois facturés: {mois_factures})")
                 return False
-            
+
+            # Protection anti-double facturation : ne facturer qu'UN SEUL mois à la fois
+            if mois_ecoules > mois_factures + 1:
+                logger.warning(f"  ⚠️  RETARD DÉTECTÉ : {mois_ecoules - mois_factures} mois non facturés")
+                logger.warning(f"  ⚠️  Pour éviter la double facturation, on facture uniquement le mois {mois_factures + 1}")
+                logger.warning(f"  ⚠️  Les mois suivants seront facturés lors des prochaines exécutions")
+
             logger.info(f"  ✅ Facturation du mois {mois_factures + 1}")
             logger.info(f"  🚀 Création de la facture...")
 
