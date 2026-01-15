@@ -165,7 +165,7 @@ class SellsyClientV2:
             {
                 "type": "catalog",
                 "related": {
-                    "type": "item",
+                    "type": "product",
                     "id": int(product_id),
                 },
                 "unit_amount": str(prix_ht),
