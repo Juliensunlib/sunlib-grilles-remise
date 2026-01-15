@@ -186,6 +186,10 @@ class SellsyClientV2:
                 }
             )
 
+        # Détecter le type de client (company ou contact)
+        client_info = self.get_client_info(int(client_id))
+        client_type = client_info.get("_entity_type", "contact")
+
         invoice_data = {
             "status": "draft",
             "currency": "EUR",
@@ -193,7 +197,7 @@ class SellsyClientV2:
             "note": "Facture générée automatiquement",
             "related": [
                 {
-                    "type": "company",
+                    "type": client_type,
                     "id": int(client_id),
                 }
             ],
@@ -219,9 +223,22 @@ class SellsyClientV2:
     # ---------------------------------------------------------------------
 
     def get_client_info(self, client_id: int) -> Dict[str, Any]:
-        """Récupère les informations d'un client"""
-        result = self._make_request("GET", f"/companies/{client_id}")
-        return result.get("data", {})
+        """Récupère les informations d'un client et son type (company ou contact)"""
+        # Essayer d'abord en tant que company
+        try:
+            result = self._make_request("GET", f"/companies/{client_id}")
+            data = result.get("data", {})
+            data["_entity_type"] = "company"
+            return data
+        except Exception as e:
+            # Si erreur, essayer en tant que contact
+            try:
+                result = self._make_request("GET", f"/contacts/{client_id}")
+                data = result.get("data", {})
+                data["_entity_type"] = "contact"
+                return data
+            except Exception as e2:
+                raise Exception(f"Client {client_id} introuvable (ni company ni contact): {e2}")
 
 
 # -------------------------------------------------------------------------
