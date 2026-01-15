@@ -179,7 +179,8 @@ class SellsyClientV2:
                     "type": "item",
                     "id": int(product_id)
                 },
-                "quantity": 1
+                "quantity": 1,
+                "type": "standard"
             }
         ]
         
@@ -189,7 +190,8 @@ class SellsyClientV2:
                 "label": libelle_remise,
                 "unit_amount": str(-montant_remise),
                 "quantity": 1,
-                "tax_id": tva_id
+                "tax_id": tva_id,
+                "type": "standard"
             })
         
         # Structure correcte selon documentation Sellsy v2
