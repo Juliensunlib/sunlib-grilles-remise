@@ -156,7 +156,7 @@ class SellsyClientV2:
         Crée une facture dans Sellsy via API v2
         
         Args:
-            client_id: ID du client (company_id dans Sellsy)
+            client_id: ID du client (third_id dans Sellsy)
             product_id: ID du produit (non utilisé en v2, gardé pour compatibilité)
             prix_ht: Prix HT avant remise
             remise_pct: Pourcentage de remise
@@ -194,9 +194,11 @@ class SellsyClientV2:
                 "tax_id": tva_id
             })
         
-        # Construction de la facture
+        # ✅ FIX : Construction de la facture avec le champ "related" obligatoire
         invoice_data = {
-            "company_id": int(client_id),
+            "related": {
+                "third_id": int(client_id)  # ✅ Champ obligatoire pour lier au client
+            },
             "currency": "EUR",
             "subject": f"Abonnement mensuel - {service_name}",
             "notes": "Facture générée automatiquement",
