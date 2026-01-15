@@ -157,7 +157,7 @@ class SellsyClientV2:
         
         Args:
             client_id: ID du client (company_id ou individual_id dans Sellsy)
-            product_id: ID du produit (non utilisé en v2, gardé pour compatibilité)
+            product_id: ID du produit dans le catalogue Sellsy
             prix_ht: Prix HT avant remise
             remise_pct: Pourcentage de remise
             libelle_remise: Libellé de la remise
@@ -172,13 +172,14 @@ class SellsyClientV2:
         montant_remise = round(prix_ht * (remise_pct / 100), 2)
         prix_final = round(prix_ht - montant_remise, 2)
         
-        # ✅ Construction des lignes de facture avec montants en STRING
+        # ✅ Construction des lignes avec "related" pointant vers l'item du catalogue
         rows = [
             {
-                "label": service_name,
-                "unit_amount": str(prix_ht),  # ✅ Converti en string
-                "quantity": 1,
-                "tax_id": tva_id
+                "related": {
+                    "type": "item",
+                    "id": int(product_id)
+                },
+                "quantity": 1
             }
         ]
         
@@ -186,7 +187,7 @@ class SellsyClientV2:
         if remise_pct > 0 and montant_remise > 0:
             rows.append({
                 "label": libelle_remise,
-                "unit_amount": str(-montant_remise),  # ✅ Converti en string (négatif)
+                "unit_amount": str(-montant_remise),
                 "quantity": 1,
                 "tax_id": tva_id
             })
