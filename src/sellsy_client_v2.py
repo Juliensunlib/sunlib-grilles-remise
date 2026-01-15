@@ -172,15 +172,16 @@ class SellsyClientV2:
         montant_remise = round(prix_ht * (remise_pct / 100), 2)
         prix_final = round(prix_ht - montant_remise, 2)
         
-        # ✅ Construction des lignes avec "related" pointant vers l'item du catalogue
+        # ✅ Construction des lignes avec prix explicite et référence au catalogue
         rows = [
             {
                 "related": {
                     "type": "item",
                     "id": int(product_id)
                 },
+                "unit_amount": str(prix_ht),
                 "quantity": 1,
-                "type": "standard"
+                "tax_id": tva_id
             }
         ]
         
@@ -190,8 +191,7 @@ class SellsyClientV2:
                 "label": libelle_remise,
                 "unit_amount": str(-montant_remise),
                 "quantity": 1,
-                "tax_id": tva_id,
-                "type": "standard"
+                "tax_id": tva_id
             })
         
         # Structure correcte selon documentation Sellsy v2
