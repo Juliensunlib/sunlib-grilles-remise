@@ -136,16 +136,27 @@ class SubscriptionInvoiceSync:
             
             # Extraction des données
             service_name = fields.get('Nom du service', 'Service')
-            client_id = fields.get('ID client Sellsy')
-            product_id = fields.get('ID Sellsy')
+            client_id = fields.get('ID_Sellsy_abonné')  # ID du client dans Sellsy
+            product_id = fields.get('ID Sellsy')  # ID du produit dans Sellsy
             prix_ht = fields.get('Prix HT', 0)
             date_debut = fields.get('Date de début')
             mois_factures = fields.get('Mois facturés', 0)
             occurrences_restantes = fields.get('Occurrences restantes', 0)
             
             # Validation des données essentielles
-            if not all([client_id, product_id, date_debut, prix_ht > 0]):
+            missing_data = []
+            if not client_id:
+                missing_data.append("ID client (ID_Sellsy_abonné)")
+            if not product_id:
+                missing_data.append("ID produit (ID Sellsy)")
+            if not date_debut:
+                missing_data.append("Date de début")
+            if not (prix_ht and prix_ht > 0):
+                missing_data.append(f"Prix HT valide (actuel: {prix_ht})")
+            
+            if missing_data:
                 logger.warning(f"⚠️  Données incomplètes pour {service_name}")
+                logger.warning(f"     Champs manquants: {', '.join(missing_data)}")
                 return False
             
             # Calcul des mois écoulés
