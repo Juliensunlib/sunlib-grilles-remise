@@ -164,9 +164,12 @@ class SellsyClientV2:
         rows = [
             {
                 "type": "catalog",
-                "item_id": int(product_id),
-                "unit_amount": str(prix_ht),
+                "related": {
+                    "type": "product",
+                    "id": int(product_id),
+                },
                 "quantity": "1",
+                "unit_amount": str(prix_ht),
                 "tax_id": tva_id,
             }
         ]
