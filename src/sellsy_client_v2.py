@@ -179,7 +179,7 @@ class SellsyClientV2:
                     "type": "item",
                     "id": int(product_id)
                 },
-                "type": "once",
+                "type": "item",
                 "unit_amount": str(prix_ht),
                 "quantity": 1,
                 "tax_id": tva_id
@@ -189,7 +189,7 @@ class SellsyClientV2:
         # Ligne de remise si applicable
         if remise_pct > 0 and montant_remise > 0:
             rows.append({
-                "type": "once",
+                "type": "item",
                 "label": libelle_remise,
                 "unit_amount": str(-montant_remise),
                 "quantity": 1,
