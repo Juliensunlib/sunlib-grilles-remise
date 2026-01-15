@@ -97,7 +97,7 @@ class SellsyClient:
         if self._tva_cache:
             return self._tva_cache
         
-        result = self._make_request('Taxs.getList', {})
+        result = self._make_request('Tax.getList', {})
         
         for tax_id, tax_data in result.get('result', {}).items():
             if float(tax_data.get('value', 0)) == 20.0:
