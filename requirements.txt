@@ -1,15 +1,68 @@
-# Dépendances pour la synchronisation des factures d'abonnement
-# Python 3.9+
-
-# Client Airtable
-pyairtable==2.3.3
-
-# Client HTTP et OAuth
 requests==2.31.0
 requests-oauthlib==1.3.1
-
-# Manipulation de dates
 python-dateutil==2.8.2
-
-# Variables d'environnement (pour tests locaux uniquement)
+pyairtable==2.1.0
 python-dotenv==1.0.0
+```
+
+---
+
+## 🎯 **CHECKLIST DE DÉPLOIEMENT**
+
+### ✅ **ÉTAPE 1 : Créer les credentials Sellsy v2**
+
+1. Va sur Sellsy : **Menu > Réglages > Portail Développeur**
+2. Clique **"API V2"** > **"Créer un accès API"**
+3. Type : **"Personnel"**
+4. Permissions : **Coche au minimum** :
+   - ✅ `companies.read`
+   - ✅ `invoices.write`
+   - ✅ `taxes.read`
+5. **Copie** ton `Client ID` et `Client Secret`
+
+---
+
+### ✅ **ÉTAPE 2 : Ajouter les secrets GitHub**
+
+Va dans **Settings > Secrets and variables > Actions**
+
+**Onglet "Secrets"** - Ajoute :
+- **Nom** : `SELLSY_V2_CLIENT_ID`
+  **Valeur** : `ton_client_id_ici`
+  
+- **Nom** : `SELLSY_V2_CLIENT_SECRET`
+  **Valeur** : `ton_client_secret_ici`
+
+**Onglet "Variables"** - Ajoute :
+- **Nom** : `SELLSY_GOCARDLESS_PAYMENT_ID`
+  **Valeur** : `TEMPORAIRE_A_TROUVER` (on verra comment le récupérer après)
+
+---
+
+### ✅ **ÉTAPE 3 : Copier-coller les fichiers**
+
+**Pour chaque fichier ci-dessus** :
+
+1. Va sur le fichier dans GitHub
+2. Clique sur **✏️ Edit**
+3. **Ctrl+A** (tout sélectionner) puis **colle** le nouveau code
+4. **Commit** avec le message indiqué
+5. Fais pareil pour les 4 fichiers
+
+---
+
+### ✅ **ÉTAPE 4 : Test de connexion**
+
+Une fois tous les fichiers pushés :
+
+1. Va dans **Actions** sur GitHub
+2. Clique sur **"Sync Subscription Invoices"**
+3. Clique **"Run workflow"**
+4. Coche **"Mode test (dry-run)"** ✅
+5. Lance
+
+**Résultat attendu** :
+```
+✅ Configuration validée avec succès
+🔐 Sellsy API: v2 (OAuth2)
+✅ TVA 20% ID: 4099258
