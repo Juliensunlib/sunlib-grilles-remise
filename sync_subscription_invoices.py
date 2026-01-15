@@ -137,7 +137,7 @@ class SubscriptionInvoiceSync:
             # Extraction des données
             service_name = fields.get('Nom du service', 'Service')
             client_id = fields.get('ID client Sellsy')
-            product_id = fields.get('ID Produit Sellsy')
+            product_id = fields.get('ID Sellsy')
             prix_ht = fields.get('Prix HT', 0)
             date_debut = fields.get('Date de début')
             mois_factures = fields.get('Mois facturés', 0)
