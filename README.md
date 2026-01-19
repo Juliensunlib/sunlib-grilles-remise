@@ -9,6 +9,8 @@ Système automatisé de création de factures d'abonnement mensuelles dans Sells
 ✅ **Historique** - Traçabilité complète dans Airtable
 ✅ **Temps réel** - Changements instantanés, pas de redéploiement
 ✅ **Facturation groupée** - Services avec même client et même date regroupés sur une seule facture
+✅ **Labels personnalisés** - Les labels des remises proviennent directement d'Airtable
+✅ **Remise intelligente** - Aucune ligne créée si remise = 0%
 
 ---
 
@@ -74,6 +76,64 @@ Pour le désactiver temporairement, commente le cron dans le workflow :
 
 ---
 
+## 💰 Système de remises dégressives
+
+### Comment ça fonctionne
+
+Pour chaque service à facturer, le système :
+
+1. **Calcule le mois à facturer** : `mois_ecoules + 1` depuis la date de début
+2. **Détermine l'année en cours** :
+   - Année 1 : mois 1 à 12
+   - Année 2 : mois 13 à 24
+   - Année 3+ : mois 25 et plus
+3. **Récupère la remise applicable** depuis la grille Airtable
+4. **Crée une ligne de remise** uniquement si le pourcentage > 0%
+
+### Structure d'une grille de remise
+
+Chaque grille contient 6 champs dans Airtable :
+
+| Champ | Type | Exemple |
+|-------|------|---------|
+| `Année 1 (%)` | Nombre | 100 |
+| `Label Année 1` | Texte | 🎉 Offre de lancement |
+| `Année 2 (%)` | Nombre | 50 |
+| `Label Année 2` | Texte | 💫 Fidélité Année 2 |
+| `Année 3+ (%)` | Nombre | 25 |
+| `Label Année 3+` | Texte | ⭐ Ancien client |
+
+### Exemple de facture avec remises
+
+```
+Client : Example SAS
+Date : 2026-01-19
+
+1. Hébergement web (mois 6, année 1)        29.90€ HT
+   ↳ 🎉 Offre de lancement (-100%)         -29.90€
+
+2. Domaine .com (mois 6, année 1)           12.00€ HT
+   (pas de remise - grille avec 0% an 1)
+
+3. Support Premium (mois 15, année 2)       99.00€ HT
+   ↳ 💎 Premium Année 2 (-30%)             -29.70€
+
+4. Backup automatique (mois 27, année 3+)   15.00€ HT
+   ↳ ⭐ Ancien client (-25%)                -3.75€
+------------------------------------------------
+TOTAL HT                                    68.55€
+TVA 20%                                     13.71€
+TOTAL TTC                                   82.26€
+```
+
+**Points importants** :
+- Chaque service peut avoir sa propre grille de remise
+- Le label affiché provient directement d'Airtable
+- Si `Année X (%)` = 0, aucune ligne de remise n'est créée
+- La remise s'applique sur le prix HT de chaque ligne
+
+---
+
 ## 🎯 Logique de sélection des grilles
 
 **Ordre de priorité :**
@@ -102,6 +162,27 @@ Pour le désactiver temporairement, commente le cron dans le workflow :
 1. Crée la nouvelle grille
 2. Coche "Grille par défaut" sur la nouvelle
 3. Décoche "Grille par défaut" sur l'ancienne
+
+### Structure complète d'une grille
+
+| Champ Airtable | Type | Description | Obligatoire |
+|----------------|------|-------------|-------------|
+| `Nom de la grille` | Texte | Nom descriptif | ✅ |
+| `Année 1 (%)` | Nombre | Remise année 1 (0-100) | ✅ |
+| `Label Année 1` | Texte | Label facture année 1 | Si % > 0 |
+| `Année 2 (%)` | Nombre | Remise année 2 (0-100) | ✅ |
+| `Label Année 2` | Texte | Label facture année 2 | Si % > 0 |
+| `Année 3+ (%)` | Nombre | Remise année 3+ (0-100) | ✅ |
+| `Label Année 3+` | Texte | Label facture année 3+ | Si % > 0 |
+| `Actif` | Checkbox | Grille active | ✅ |
+| `Grille par défaut` | Checkbox | Grille par défaut | ❌ |
+
+**Exemples de labels** :
+- 🎉 Offre de lancement
+- 💫 Fidélité Année 2
+- ⭐ Ancien client
+- 🎁 Remise fidélité
+- 💎 Client Premium
 
 ### Assigner une grille à un abonnement
 
@@ -144,6 +225,35 @@ Lorsque plusieurs services Airtable ont :
 - Chaque ligne conserve sa remise individuelle selon sa grille
 - Le sujet de la facture indique le nombre de services groupés
 - Tous les compteurs Airtable sont mis à jour après création
+
+---
+
+## 🧪 Tests
+
+Le projet inclut des tests pour valider la logique métier :
+
+### Test de la logique des remises
+```bash
+python3 test_discount_logic.py
+```
+
+Valide :
+- Calcul correct des remises selon le mois
+- Application des bons labels selon l'année
+- Aucune ligne créée si remise = 0%
+
+### Test de facture groupée
+```bash
+python3 test_facture_groupee.py
+```
+
+Simule une facture complète avec :
+- Plusieurs services
+- Différentes grilles de remise
+- Différentes années d'abonnement
+- Calcul du total HT/TTC
+
+Ces tests ne nécessitent aucune connexion API et peuvent être exécutés à tout moment.
 
 ---
 
