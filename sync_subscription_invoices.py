@@ -265,49 +265,223 @@ class SubscriptionInvoiceSync:
             logger.error(f"  ❌ {str(e)}")
             return False
     
+    def group_services_by_client_and_date(self, services: List[Dict]) -> Dict[tuple, List[Dict]]:
+        """
+        Groupe les services par (client_id, date_facturation)
+
+        Args:
+            services: Liste des services éligibles
+
+        Returns:
+            Dictionnaire avec clé (client_id, date) et valeur liste de services
+        """
+        from collections import defaultdict
+        grouped = defaultdict(list)
+
+        for service in services:
+            fields = service['fields']
+            client_id = fields.get('ID_Sellsy_abonné')
+            date_debut = fields.get('Date de début')
+            mois_factures = fields.get('Mois facturés', 0)
+
+            # Calculer la date de facturation (mois suivant)
+            if client_id and date_debut:
+                date_debut_obj = datetime.strptime(date_debut, '%Y-%m-%d')
+                date_facturation = date_debut_obj + relativedelta(months=mois_factures + 1)
+                date_key = date_facturation.strftime('%Y-%m')
+
+                key = (str(client_id), date_key)
+                grouped[key].append(service)
+
+        return dict(grouped)
+
+    def process_grouped_subscription(self, client_id: str, date_key: str, services: List[Dict]) -> bool:
+        """
+        Traite un groupe d'abonnements pour un même client et une même date
+        Crée une seule facture avec plusieurs lignes
+
+        Args:
+            client_id: ID du client Sellsy
+            date_key: Clé de date au format YYYY-MM
+            services: Liste des services à facturer ensemble
+
+        Returns:
+            True si la facture a été créée avec succès, False sinon
+        """
+        try:
+            logger.info(f"📋 Traitement groupé: Client {client_id} - Date {date_key}")
+            logger.info("=" * 70)
+            logger.info(f"  📦 {len(services)} service(s) à facturer ensemble")
+
+            # Préparation des lignes de facture
+            invoice_lines = []
+            services_to_update = []
+
+            for service in services:
+                record_id = service['id']
+                fields = service['fields']
+
+                # Extraction des données
+                service_name = fields.get('Nom du service', 'Service')
+                product_id = fields.get('ID Sellsy')
+                prix_ht = fields.get('Prix HT', 0)
+                date_debut = fields.get('Date de début')
+                mois_factures = fields.get('Mois facturés', 0)
+                occurrences_restantes = fields.get('Occurrences restantes', 0)
+
+                # Validation des données essentielles
+                if not product_id or not date_debut or not (prix_ht and prix_ht > 0):
+                    logger.warning(f"  ⚠️  Données incomplètes pour {service_name}, ignoré")
+                    continue
+
+                # Calcul des mois écoulés
+                date_debut_obj = datetime.strptime(date_debut, '%Y-%m-%d')
+                aujourd_hui = datetime.now()
+                mois_ecoules = (aujourd_hui.year - date_debut_obj.year) * 12 + \
+                              (aujourd_hui.month - date_debut_obj.month)
+
+                logger.info(f"  • {service_name}")
+                logger.info(f"    📅 Mois écoulés: {mois_ecoules}, Mois facturés: {mois_factures}")
+
+                # Vérifier si une facturation est due
+                if mois_ecoules <= mois_factures:
+                    logger.info(f"    ⏭️  Pas de facturation due")
+                    continue
+
+                if mois_ecoules > mois_factures + 1:
+                    logger.warning(f"    ⚠️  RETARD : {mois_ecoules - mois_factures} mois non facturés")
+                    logger.warning(f"    ⚠️  Facturation uniquement du mois {mois_factures + 1}")
+
+                logger.info(f"    ✅ Facturation du mois {mois_factures + 1}")
+
+                # Calcul de la remise
+                appliquer_remise = fields.get('Appliquer remise dégressive', True)
+                remise_pct = 0
+                montant_remise = 0
+                libelle_remise = ""
+
+                if appliquer_remise:
+                    try:
+                        grille_id = fields.get('Grille de remise')
+                        if grille_id and len(grille_id) > 0:
+                            grille = self.airtable.get_discount_grid(grille_id[0])
+                        else:
+                            grille = self.get_default_discount_grid()
+
+                        remise_pct = self.calculate_discount(mois_factures + 1, grille)
+                        montant_remise = round(prix_ht * (remise_pct / 100), 2)
+                        nom_grille = grille.get('Nom', 'Offre')
+                        libelle_remise = f"🎉 {nom_grille} (-{int(remise_pct)}%)"
+                    except Exception as e:
+                        logger.warning(f"    ⚠️  Impossible de récupérer la grille de remise: {str(e)}")
+
+                prix_final = round(prix_ht - montant_remise, 2)
+                logger.info(f"    💰 Prix HT: {prix_ht}€ | Remise: {remise_pct}% | Final: {prix_final}€")
+
+                # Ajouter la ligne à la facture
+                invoice_lines.append({
+                    'product_id': int(product_id),
+                    'service_name': service_name,
+                    'prix_ht': prix_ht,
+                    'remise_pct': remise_pct,
+                    'libelle_remise': libelle_remise
+                })
+
+                # Mémoriser les mises à jour à faire
+                services_to_update.append({
+                    'record_id': record_id,
+                    'mois_factures': mois_factures + 1,
+                    'occurrences_restantes': max(0, occurrences_restantes - 1)
+                })
+
+            # Si aucune ligne valide, on arrête
+            if not invoice_lines:
+                logger.info(f"  ⏭️  Aucune ligne de facture valide pour ce groupe")
+                return False
+
+            # Mode dry-run : simulation uniquement
+            if self.dry_run:
+                logger.info(f"  🧪 MODE DRY-RUN: Facture non créée (test uniquement)")
+                logger.info(f"     - Client ID: {client_id}")
+                logger.info(f"     - Nombre de lignes: {len(invoice_lines)}")
+                return True
+
+            # Création de la facture groupée dans Sellsy
+            logger.info(f"  📤 Envoi de la facture groupée à Sellsy v2...")
+            result = self.sellsy.create_grouped_invoice(
+                client_id=int(client_id),
+                invoice_lines=invoice_lines
+            )
+
+            invoice_id = result.get('invoice_id')
+            logger.info(f"  ✅ Facture groupée créée dans Sellsy ! (ID: {invoice_id})")
+            logger.info(f"     Nombre de lignes: {len(invoice_lines)}")
+
+            # Mise à jour des compteurs dans Airtable pour tous les services
+            for update_info in services_to_update:
+                self.airtable.update_service_counters(
+                    record_id=update_info['record_id'],
+                    mois_factures=update_info['mois_factures'],
+                    occurrences_restantes=update_info['occurrences_restantes']
+                )
+
+            logger.info(f"  ✅ Compteurs mis à jour dans Airtable ({len(services_to_update)} services)")
+
+            return True
+
+        except Exception as e:
+            logger.error(f"  ❌ Échec de la création de la facture groupée")
+            logger.error(f"  ❌ {str(e)}")
+            return False
+
     def run(self):
         """Point d'entrée principal : traite tous les abonnements éligibles"""
         try:
             logger.info("=" * 70)
             logger.info("DÉMARRAGE DE LA SYNCHRONISATION DES FACTURES D'ABONNEMENT V2.0")
             logger.info("=" * 70)
-            
+
             # Récupération des abonnements éligibles
             services = self.airtable.get_eligible_subscriptions()
-            
+
             if not services:
                 logger.info("ℹ️  Aucun abonnement éligible à facturer aujourd'hui")
                 return
-            
+
             logger.info(f"📊 {len(services)} abonnement(s) éligible(s) trouvé(s)")
             logger.info("")
-            
-            # Traitement de chaque abonnement
+
+            # Groupement des services par client et date
+            grouped_services = self.group_services_by_client_and_date(services)
+            logger.info(f"📦 {len(grouped_services)} facture(s) groupée(s) à créer")
+            logger.info("")
+
+            # Traitement de chaque groupe
             success_count = 0
             error_count = 0
-            
-            for service in services:
+
+            for (client_id, date_key), service_group in grouped_services.items():
                 try:
-                    if self.process_single_subscription(service):
+                    if self.process_grouped_subscription(client_id, date_key, service_group):
                         success_count += 1
-                    logger.info("")  # Ligne vide entre les abonnements
-                    
+                    logger.info("")  # Ligne vide entre les groupes
+
                 except Exception as e:
                     error_count += 1
                     logger.error(f"❌ Erreur: {str(e)}")
                     logger.info("")
-            
+
             # Résumé
             logger.info("=" * 70)
             logger.info("RÉSUMÉ DE LA SYNCHRONISATION")
             logger.info("=" * 70)
-            logger.info(f"✅ Succès: {success_count}")
+            logger.info(f"✅ Succès: {success_count} facture(s) groupée(s)")
             logger.info(f"❌ Échecs: {error_count}")
-            logger.info(f"📊 Total traité: {len(services)}")
-            
+            logger.info(f"📊 Total services traités: {len(services)}")
+
             if self.dry_run:
                 logger.info("🧪 Mode DRY-RUN: Aucune modification réelle effectuée")
-            
+
         except Exception as e:
             logger.error(f"❌ ERREUR CRITIQUE: {str(e)}")
             raise

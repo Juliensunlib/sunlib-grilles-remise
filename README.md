@@ -4,10 +4,11 @@ Système automatisé de création de factures d'abonnement mensuelles dans Sells
 
 ## 🎯 Nouveautés V2.0
 
-✅ **Grilles de remise configurables** - Plus besoin de modifier le code !  
-✅ **Multi-grilles** - VIP, régionales, promotions, test A/B  
-✅ **Historique** - Traçabilité complète dans Airtable  
+✅ **Grilles de remise configurables** - Plus besoin de modifier le code !
+✅ **Multi-grilles** - VIP, régionales, promotions, test A/B
+✅ **Historique** - Traçabilité complète dans Airtable
 ✅ **Temps réel** - Changements instantanés, pas de redéploiement
+✅ **Facturation groupée** - Services avec même client et même date regroupés sur une seule facture
 
 ---
 
@@ -108,6 +109,41 @@ Pour le désactiver temporairement, commente le cron dans le workflow :
 2. Ouvre l'abonnement
 3. Champ `Grille de remise` → Sélectionne la grille
 4. Sauvegarde
+
+---
+
+## 📦 Facturation groupée
+
+### Principe
+
+Lorsque plusieurs services Airtable ont :
+- **Le même ID client Sellsy** (`ID_Sellsy_abonné`)
+- **La même date de facturation** (calculée selon date de début + mois facturés)
+
+→ Ils sont automatiquement regroupés sur **une seule facture** avec plusieurs lignes.
+
+### Avantages
+
+✅ **Client** : Une seule facture mensuelle au lieu de plusieurs
+✅ **Gestion** : Moins de factures à traiter
+✅ **Clarté** : Tous les services visibles sur un document unique
+
+### Exemple
+
+**Airtable** :
+- Service A : Client 123, Date début 2025-01-01, Mois facturés 0
+- Service B : Client 123, Date début 2025-01-01, Mois facturés 0
+- Service C : Client 456, Date début 2025-01-01, Mois facturés 0
+
+**Résultat dans Sellsy** :
+- Facture 1 : Client 123 (2 lignes : Service A + Service B)
+- Facture 2 : Client 456 (1 ligne : Service C)
+
+### Comportement
+
+- Chaque ligne conserve sa remise individuelle selon sa grille
+- Le sujet de la facture indique le nombre de services groupés
+- Tous les compteurs Airtable sont mis à jour après création
 
 ---
 

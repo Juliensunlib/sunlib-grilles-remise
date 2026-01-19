@@ -5,7 +5,7 @@ OAuth2 moderne et REST standard (CONFORME DOC SELLSY V2)
 
 import os
 from datetime import datetime, timedelta
-from typing import Dict, Optional, Any
+from typing import Dict, Optional, Any, List
 import requests
 
 
@@ -217,6 +217,108 @@ class SellsyClientV2:
             "invoice_id": result.get("data", {}).get("id"),
             "montant_ht": prix_final,
             "montant_remise": montant_remise,
+        }
+
+    def create_grouped_invoice(
+        self,
+        client_id: int,
+        invoice_lines: List[Dict[str, Any]],
+    ) -> Dict[str, Any]:
+        """
+        Crée une facture groupée Sellsy v2 avec plusieurs lignes de produits
+
+        Args:
+            client_id: ID du client (company_id dans Sellsy)
+            invoice_lines: Liste de dictionnaires contenant:
+                - product_id: ID du produit
+                - service_name: Nom du service
+                - prix_ht: Prix HT avant remise
+                - remise_pct: Pourcentage de remise
+                - libelle_remise: Libellé de la remise
+
+        Returns:
+            Réponse avec invoice_id
+        """
+
+        tva_id = self.get_tva_20_id()
+
+        # Construction des lignes de facture
+        rows = []
+        montant_total_ht = 0
+        montant_total_remise = 0
+
+        for line in invoice_lines:
+            product_id = line['product_id']
+            prix_ht = line['prix_ht']
+            remise_pct = line['remise_pct']
+            libelle_remise = line.get('libelle_remise', '')
+
+            montant_remise = round(prix_ht * (remise_pct / 100), 2)
+            prix_final = round(prix_ht - montant_remise, 2)
+
+            montant_total_ht += prix_final
+            montant_total_remise += montant_remise
+
+            # Ligne produit
+            rows.append({
+                "type": "catalog",
+                "related": {
+                    "type": "product",
+                    "id": int(product_id),
+                },
+                "quantity": "1",
+                "unit_amount": str(prix_ht),
+                "tax_id": tva_id,
+            })
+
+            # Ligne remise si applicable
+            if montant_remise > 0:
+                rows.append({
+                    "type": "single",
+                    "label": libelle_remise,
+                    "description": libelle_remise,
+                    "unit_amount": str(-montant_remise),
+                    "quantity": "1",
+                    "tax_id": tva_id,
+                })
+
+        # Détecter le type de client
+        client_info = self.get_client_info(int(client_id))
+        client_type = client_info.get("_entity_type", "individual")
+
+        # Créer un sujet descriptif
+        if len(invoice_lines) == 1:
+            subject = f"Abonnement mensuel - {invoice_lines[0]['service_name']}"
+        else:
+            subject = f"Abonnements mensuels ({len(invoice_lines)} services)"
+
+        invoice_data = {
+            "status": "draft",
+            "currency": "EUR",
+            "subject": subject,
+            "note": "Facture groupée générée automatiquement",
+            "related": [
+                {
+                    "type": client_type,
+                    "id": int(client_id),
+                }
+            ],
+            "rows": rows,
+        }
+
+        # Debug
+        import json
+        print("📤 ENVOI SELLSY (FACTURE GROUPÉE):")
+        print(json.dumps(invoice_data, indent=2, ensure_ascii=False))
+
+        result = self._make_request("POST", "/invoices", data=invoice_data)
+
+        return {
+            "success": True,
+            "invoice_id": result.get("data", {}).get("id"),
+            "montant_ht": montant_total_ht,
+            "montant_remise": montant_total_remise,
+            "nombre_lignes": len(invoice_lines),
         }
 
     # ---------------------------------------------------------------------
