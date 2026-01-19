@@ -203,6 +203,7 @@ class SellsyClientV2:
             ],
             "rows": rows,
             "use_lines_discount_conditions": False,
+            "discount_conditions": [],
             "settings": {
                 "payments": {
                     "payment_modules": [],
@@ -310,6 +311,7 @@ class SellsyClientV2:
             ],
             "rows": rows,
             "use_lines_discount_conditions": False,
+            "discount_conditions": [],
             "settings": {
                 "payments": {
                     "payment_modules": [],
