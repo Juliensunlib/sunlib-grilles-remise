@@ -202,6 +202,11 @@ class SellsyClientV2:
                 }
             ],
             "rows": rows,
+            "settings": {
+                "payments": {
+                    "direct_debit_module": "gocardless"
+                }
+            }
         }
 
         # Debug
@@ -302,6 +307,11 @@ class SellsyClientV2:
                 }
             ],
             "rows": rows,
+            "settings": {
+                "payments": {
+                    "direct_debit_module": "gocardless"
+                }
+            }
         }
 
         # Debug
