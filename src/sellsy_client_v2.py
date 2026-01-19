@@ -195,7 +195,7 @@ class SellsyClientV2:
             "status": "draft",
             "currency": "EUR",
             "subject": f"Abonnement mensuel - {service_name}",
-            "note": "Facture générée automatiquement",
+            "note": "Retrouvez l'intégralité de vos factures dans votre espace abonné",
             "related": [
                 {
                     "type": client_type,
@@ -296,7 +296,7 @@ class SellsyClientV2:
             "status": "draft",
             "currency": "EUR",
             "subject": subject,
-            "note": "Facture groupée générée automatiquement",
+            "note": "Retrouvez l'intégralité de vos factures dans votre espace abonné",
             "related": [
                 {
                     "type": client_type,
