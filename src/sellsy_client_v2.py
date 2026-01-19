@@ -171,6 +171,10 @@ class SellsyClientV2:
                 "quantity": "1",
                 "unit_amount": str(prix_ht),
                 "tax_id": tva_id,
+                "discount": {
+                    "type": "percentage",
+                    "value": "0"
+                }
             }
         ]
 
@@ -203,6 +207,7 @@ class SellsyClientV2:
             ],
             "rows": rows,
             "use_lines_discount_conditions": False,
+            "use_entity_discount_conditions": False,
             "discount_conditions": [],
             "settings": {
                 "payments": {
@@ -276,6 +281,10 @@ class SellsyClientV2:
                 "quantity": "1",
                 "unit_amount": str(prix_ht),
                 "tax_id": tva_id,
+                "discount": {
+                    "type": "percentage",
+                    "value": "0"
+                }
             })
 
             # Ligne remise si applicable
@@ -311,6 +320,7 @@ class SellsyClientV2:
             ],
             "rows": rows,
             "use_lines_discount_conditions": False,
+            "use_entity_discount_conditions": False,
             "discount_conditions": [],
             "settings": {
                 "payments": {
