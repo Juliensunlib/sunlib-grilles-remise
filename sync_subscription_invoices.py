@@ -80,42 +80,57 @@ class SubscriptionInvoiceSync:
         """
         Récupère la grille de remise par défaut depuis Airtable
         Utilise un cache pour éviter les appels répétés
-        
+
         Returns:
             Dictionnaire contenant les pourcentages de remise par année
-            
+
         Raises:
             Exception: Si aucune grille par défaut n'est trouvée
         """
         if self._default_grid:
             return self._default_grid
-        
+
         grids = self.airtable.get_discount_grids()
-        
+
         for grid in grids:
-            if grid.get('Par défaut', False):
+            if grid.get('Grille par défaut', False):
                 self._default_grid = grid
                 return grid
-        
+
         raise Exception("❌ Aucune grille de remise par défaut n'est définie dans Airtable")
     
-    def calculate_discount(self, mois_ecoules: int, grid: Dict) -> float:
+    def get_discount_info(self, mois_ecoules: int, grid: Dict) -> tuple:
         """
-        Calcule le pourcentage de remise selon le mois écoulé et la grille
-        
+        Récupère le pourcentage de remise et le label selon l'année en cours
+
         Args:
             mois_ecoules: Nombre de mois écoulés depuis le début
-            grid: Grille de remise (dict avec Année 1, 2, 3+)
-            
+            grid: Grille de remise (dict avec Année 1 (%), Label Année 1, etc.)
+
         Returns:
-            Pourcentage de remise (0-100)
+            Tuple (pourcentage de remise, label) ou (0, "") si pas de remise
         """
         if mois_ecoules <= 12:
-            return grid.get('Remise année 1', 0)
+            pct = grid.get('Année 1 (%)', 0)
+            label = grid.get('Label Année 1', '')
         elif mois_ecoules <= 24:
-            return grid.get('Remise année 2', 0)
+            pct = grid.get('Année 2 (%)', 0)
+            label = grid.get('Label Année 2', '')
         else:
-            return grid.get('Remise année 3+', 0)
+            pct = grid.get('Année 3+ (%)', 0)
+            label = grid.get('Label Année 3+', '')
+
+        # Convertir en float et s'assurer que c'est un nombre valide
+        try:
+            pct = float(pct) if pct else 0
+        except (ValueError, TypeError):
+            pct = 0
+
+        # Ne retourner que si le pourcentage est > 0
+        if pct > 0 and label:
+            return (pct, label)
+        else:
+            return (0, "")
     
     def process_single_subscription(self, service: Dict) -> bool:
         """
@@ -191,19 +206,16 @@ class SubscriptionInvoiceSync:
                     if grille_id and len(grille_id) > 0:
                         # Grille spécifique liée
                         grille = self.airtable.get_discount_grid(grille_id[0])
-                        logger.info(f"  📊 Grille spécifique: '{grille.get('Nom', 'N/A')}'")
+                        logger.info(f"  📊 Grille spécifique: '{grille.get('Nom de la grille', 'N/A')}'")
                     else:
                         # Grille par défaut
                         grille = self.get_default_discount_grid()
-                        logger.info(f"  📊 Grille par défaut: '{grille.get('Nom', 'N/A')}'")
+                        logger.info(f"  📊 Grille par défaut: '{grille.get('Nom de la grille', 'N/A')}'")
 
-                    remise_pct = self.calculate_discount(mois_factures + 1, grille)
+                    # Récupération du pourcentage et du label pour l'année en cours
+                    remise_pct, libelle_remise = self.get_discount_info(mois_factures + 1, grille)
                     montant_remise = round(prix_ht * (remise_pct / 100), 2)
                     prix_final = round(prix_ht - montant_remise, 2)
-
-                    # Construction du libellé de remise
-                    nom_grille = grille.get('Nom', 'Offre')
-                    libelle_remise = f"🎉 {nom_grille} (-{int(remise_pct)}%)"
 
                 except Exception as e:
                     logger.warning(f"  ⚠️  Impossible de récupérer la grille de remise: {str(e)}")
@@ -219,7 +231,10 @@ class SubscriptionInvoiceSync:
                 prix_final = prix_ht
                 libelle_remise = ""
             
-            logger.info(f"  💰 Prix HT: {prix_ht}€ | Remise: {remise_pct}% | Final: {prix_final}€")
+            if remise_pct > 0 and libelle_remise:
+                logger.info(f"  💰 Prix HT: {prix_ht}€ | Remise: {remise_pct}% ({libelle_remise}) | Final: {prix_final}€")
+            else:
+                logger.info(f"  💰 Prix HT: {prix_ht}€ | Pas de remise")
             
             # Mode dry-run : simulation uniquement
             if self.dry_run:
@@ -365,18 +380,23 @@ class SubscriptionInvoiceSync:
                         grille_id = fields.get('Grille de remise')
                         if grille_id and len(grille_id) > 0:
                             grille = self.airtable.get_discount_grid(grille_id[0])
+                            logger.info(f"    📊 Grille: '{grille.get('Nom de la grille', 'N/A')}'")
                         else:
                             grille = self.get_default_discount_grid()
+                            logger.info(f"    📊 Grille par défaut: '{grille.get('Nom de la grille', 'N/A')}'")
 
-                        remise_pct = self.calculate_discount(mois_factures + 1, grille)
+                        # Récupération du pourcentage et du label pour l'année en cours
+                        remise_pct, libelle_remise = self.get_discount_info(mois_factures + 1, grille)
                         montant_remise = round(prix_ht * (remise_pct / 100), 2)
-                        nom_grille = grille.get('Nom', 'Offre')
-                        libelle_remise = f"🎉 {nom_grille} (-{int(remise_pct)}%)"
                     except Exception as e:
                         logger.warning(f"    ⚠️  Impossible de récupérer la grille de remise: {str(e)}")
 
                 prix_final = round(prix_ht - montant_remise, 2)
-                logger.info(f"    💰 Prix HT: {prix_ht}€ | Remise: {remise_pct}% | Final: {prix_final}€")
+
+                if remise_pct > 0 and libelle_remise:
+                    logger.info(f"    💰 Prix HT: {prix_ht}€ | Remise: {remise_pct}% ({libelle_remise}) | Final: {prix_final}€")
+                else:
+                    logger.info(f"    💰 Prix HT: {prix_ht}€ | Pas de remise")
 
                 # Ajouter la ligne à la facture
                 invoice_lines.append({
