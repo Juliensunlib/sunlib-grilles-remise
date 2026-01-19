@@ -205,7 +205,7 @@ class SellsyClientV2:
             "use_lines_discount_conditions": False,
             "settings": {
                 "payments": {
-                    "direct_debit_module": "gocardless"
+                    "payment_modules": ["gocardless"]
                 }
             }
         }
@@ -311,7 +311,7 @@ class SellsyClientV2:
             "use_lines_discount_conditions": False,
             "settings": {
                 "payments": {
-                    "direct_debit_module": "gocardless"
+                    "payment_modules": ["gocardless"]
                 }
             }
         }
