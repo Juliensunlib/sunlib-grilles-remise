@@ -179,7 +179,6 @@ class SellsyClientV2:
             rows.append(
                 {
                     "type": "single",
-                    "label": libelle_remise,
                     "description": libelle_remise,
                     "unit_amount": str(-montant_remise),
                     "quantity": "1",
@@ -275,7 +274,6 @@ class SellsyClientV2:
             if montant_remise > 0:
                 rows.append({
                     "type": "single",
-                    "label": libelle_remise,
                     "description": libelle_remise,
                     "unit_amount": str(-montant_remise),
                     "quantity": "1",
