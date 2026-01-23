@@ -195,7 +195,7 @@ class SellsyClientV2:
         client_type = client_info.get("_entity_type", "individual")
 
         invoice_data = {
-            "status": "draft",
+            "status": "sent",
             "currency": "EUR",
             "subject": f"Abonnement mensuel - {service_name}",
             "note": "Retrouvez l'intégralité de vos factures dans votre espace abonné",
@@ -224,9 +224,17 @@ class SellsyClientV2:
 
         result = self._make_request("POST", "/invoices", data=invoice_data)
 
+        invoice_id = result.get("data", {}).get("id")
+
+        # Envoyer la facture par email automatiquement
+        try:
+            self.send_invoice_by_email(invoice_id)
+        except Exception as e:
+            print(f"⚠️ Erreur lors de l'envoi de l'email pour la facture {invoice_id}: {e}")
+
         return {
             "success": True,
-            "invoice_id": result.get("data", {}).get("id"),
+            "invoice_id": invoice_id,
             "montant_ht": prix_final,
             "montant_remise": montant_remise,
         }
@@ -308,7 +316,7 @@ class SellsyClientV2:
             subject = f"Abonnements mensuels ({len(invoice_lines)} services)"
 
         invoice_data = {
-            "status": "draft",
+            "status": "sent",
             "currency": "EUR",
             "subject": subject,
             "note": "Retrouvez l'intégralité de vos factures dans votre espace abonné",
@@ -337,13 +345,34 @@ class SellsyClientV2:
 
         result = self._make_request("POST", "/invoices", data=invoice_data)
 
+        invoice_id = result.get("data", {}).get("id")
+
+        # Envoyer la facture par email automatiquement
+        try:
+            self.send_invoice_by_email(invoice_id)
+        except Exception as e:
+            print(f"⚠️ Erreur lors de l'envoi de l'email pour la facture {invoice_id}: {e}")
+
         return {
             "success": True,
-            "invoice_id": result.get("data", {}).get("id"),
+            "invoice_id": invoice_id,
             "montant_ht": montant_total_ht,
             "montant_remise": montant_total_remise,
             "nombre_lignes": len(invoice_lines),
         }
+
+    def send_invoice_by_email(self, invoice_id: int) -> Dict[str, Any]:
+        """
+        Envoie une facture par email au client
+
+        Args:
+            invoice_id: ID de la facture dans Sellsy
+
+        Returns:
+            Réponse de l'API
+        """
+        result = self._make_request("POST", f"/invoices/{invoice_id}/send-by-email")
+        return result
 
     # ---------------------------------------------------------------------
     # CLIENT
