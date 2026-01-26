@@ -378,15 +378,29 @@ class SellsyClientV2:
             Réponse de l'API avec la facture validée
         """
 
-        data = {}
-        if date:
-            data["date"] = date
+        # Méthode 1: Essayer avec l'endpoint /validate
+        try:
+            data = None
+            if date:
+                data = {"date": date}
 
-        result = self._make_request(
-            "POST",
-            f"/invoices/{invoice_id}/validate",
-            data=data if data else None
-        )
+            result = self._make_request(
+                "POST",
+                f"/invoices/{invoice_id}/validate",
+                data=data
+            )
+        except Exception as e:
+            # Méthode 2: Si ça échoue, essayer avec PATCH et changement de statut
+            print(f"⚠️ Méthode validate échouée, tentative avec PATCH...")
+            data = {"status": "due"}
+            if date:
+                data["date"] = date
+
+            result = self._make_request(
+                "PATCH",
+                f"/invoices/{invoice_id}",
+                data=data
+            )
 
         import json
         print(f"✅ Facture {invoice_id} validée (draft → due)")
