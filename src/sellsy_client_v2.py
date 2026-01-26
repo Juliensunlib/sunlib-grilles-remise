@@ -361,6 +361,40 @@ class SellsyClientV2:
             "nombre_lignes": len(invoice_lines),
         }
 
+    def validate_invoice(
+        self,
+        invoice_id: int,
+        date: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """
+        Valide une facture (passage draft → due)
+
+        Args:
+            invoice_id: ID de la facture à valider
+            date: Date de la facture (format YYYY-MM-DD), optionnel
+                  Si non fourni, utilise la date actuelle
+
+        Returns:
+            Réponse de l'API avec la facture validée
+        """
+
+        data = {}
+        if date:
+            data["date"] = date
+
+        result = self._make_request(
+            "POST",
+            f"/invoices/{invoice_id}/validate",
+            data=data if data else None
+        )
+
+        import json
+        print(f"✅ Facture {invoice_id} validée (draft → due)")
+        print(f"📥 RÉPONSE SELLSY (validation):")
+        print(json.dumps(result, indent=2, ensure_ascii=False))
+
+        return result
+
     # ---------------------------------------------------------------------
     # CLIENT
     # ---------------------------------------------------------------------
