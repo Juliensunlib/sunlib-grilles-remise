@@ -160,26 +160,31 @@ class SellsyClientV2:
         montant_remise = round(prix_ht * (remise_pct / 100), 2)
         prix_final = round(prix_ht - montant_remise, 2)
 
-        # ✅ LIGNE ARTICLE CATALOGUE AVEC REMISE DIRECTE
-        row = {
-            "type": "catalog",
-            "related": {
-                "type": "product",
-                "id": int(product_id),
-            },
-            "quantity": "1",
-            "unit_amount": str(prix_ht),
-            "tax_id": tva_id,
-        }
-
-        # Appliquer la remise directement sur la ligne si nécessaire
-        if remise_pct > 0:
-            row["discount"] = {
-                "type": "percentage",
-                "value": str(remise_pct)
+        # ✅ LIGNE ARTICLE CATALOGUE (sans discount sur la ligne)
+        rows = [
+            {
+                "type": "catalog",
+                "related": {
+                    "type": "product",
+                    "id": int(product_id),
+                },
+                "quantity": "1",
+                "unit_amount": str(prix_ht),
+                "tax_id": tva_id,
             }
+        ]
 
-        rows = [row]
+        # ✅ LIGNE REMISE SÉPARÉE (si remise > 0)
+        if montant_remise > 0:
+            rows.append(
+                {
+                    "type": "single",
+                    "description": libelle_remise,
+                    "unit_amount": str(-montant_remise),
+                    "quantity": "1",
+                    "tax_id": tva_id,
+                }
+            )
 
         # Détecter le type de client (company ou individual)
         client_info = self.get_client_info(int(client_id))
@@ -270,8 +275,8 @@ class SellsyClientV2:
             montant_total_ht += prix_final
             montant_total_remise += montant_remise
 
-            # Ligne produit avec remise directe
-            row = {
+            # Ligne produit (sans discount sur la ligne)
+            rows.append({
                 "type": "catalog",
                 "related": {
                     "type": "product",
@@ -280,16 +285,17 @@ class SellsyClientV2:
                 "quantity": "1",
                 "unit_amount": str(prix_ht),
                 "tax_id": tva_id,
-            }
+            })
 
-            # Appliquer la remise directement sur la ligne si nécessaire
-            if remise_pct > 0:
-                row["discount"] = {
-                    "type": "percentage",
-                    "value": str(remise_pct)
-                }
-
-            rows.append(row)
+            # Ligne remise séparée (si remise > 0)
+            if montant_remise > 0:
+                rows.append({
+                    "type": "single",
+                    "description": libelle_remise,
+                    "unit_amount": str(-montant_remise),
+                    "quantity": "1",
+                    "tax_id": tva_id,
+                })
 
         # Détecter le type de client
         client_info = self.get_client_info(int(client_id))
