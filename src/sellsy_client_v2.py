@@ -205,6 +205,14 @@ class SellsyClientV2:
             "use_lines_discount_conditions": False,
             "use_entity_discount_conditions": False,
             "discount_conditions": [],
+            "settings": {
+                "payments": {
+                    "payment_modules": [],
+                    "direct_debit_module": "gocardless"
+                },
+                "show_payment_conditions": False,
+                "show_bank_details": False
+            }
         }
 
         # Debug
@@ -320,6 +328,14 @@ class SellsyClientV2:
             "use_lines_discount_conditions": False,
             "use_entity_discount_conditions": False,
             "discount_conditions": [],
+            "settings": {
+                "payments": {
+                    "payment_modules": [],
+                    "direct_debit_module": "gocardless"
+                },
+                "show_payment_conditions": False,
+                "show_bank_details": False
+            }
         }
 
         # Debug
