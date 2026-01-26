@@ -191,7 +191,7 @@ class SellsyClientV2:
         client_type = client_info.get("_entity_type", "individual")
 
         invoice_data = {
-            "status": "draft",
+            "status": "sent",
             "currency": "EUR",
             "subject": f"Abonnement mensuel - {service_name}",
             "note": "Retrouvez l'intégralité de vos factures dans votre espace abonné",
@@ -224,19 +224,13 @@ class SellsyClientV2:
         if not invoice_id:
             raise Exception(f"❌ ID de facture non trouvé dans la réponse: {result}")
 
-        # Finaliser et envoyer la facture
+        # Envoyer la facture par email (déjà finalisée avec status "sent")
         try:
-            # Étape 1 : Finaliser la facture (PATCH pour changer le status)
-            print(f"🔄 Finalisation de la facture {invoice_id}...")
-            self._make_request("PATCH", f"/invoices/{invoice_id}", data={"status": "sent"})
-            print(f"✅ Facture {invoice_id} finalisée (status: sent)")
-
-            # Étape 2 : Envoyer par email
-            print(f"📧 Envoi de la facture par email...")
+            print(f"📧 Envoi de la facture {invoice_id} par email...")
             self.send_invoice_by_email(invoice_id)
             print(f"✅ Facture {invoice_id} envoyée par email")
         except Exception as e:
-            print(f"❌ ERREUR lors de la finalisation/envoi de la facture {invoice_id}:")
+            print(f"❌ ERREUR lors de l'envoi de la facture {invoice_id}:")
             print(f"   {e}")
             raise  # Propager l'erreur pour debug
 
@@ -320,7 +314,7 @@ class SellsyClientV2:
             subject = f"Abonnements mensuels ({len(invoice_lines)} services)"
 
         invoice_data = {
-            "status": "draft",
+            "status": "sent",
             "currency": "EUR",
             "subject": subject,
             "note": "Retrouvez l'intégralité de vos factures dans votre espace abonné",
@@ -353,19 +347,13 @@ class SellsyClientV2:
         if not invoice_id:
             raise Exception(f"❌ ID de facture non trouvé dans la réponse: {result}")
 
-        # Finaliser et envoyer la facture
+        # Envoyer la facture par email (déjà finalisée avec status "sent")
         try:
-            # Étape 1 : Finaliser la facture (PATCH pour changer le status)
-            print(f"🔄 Finalisation de la facture groupée {invoice_id}...")
-            self._make_request("PATCH", f"/invoices/{invoice_id}", data={"status": "sent"})
-            print(f"✅ Facture groupée {invoice_id} finalisée (status: sent)")
-
-            # Étape 2 : Envoyer par email
-            print(f"📧 Envoi de la facture groupée par email...")
+            print(f"📧 Envoi de la facture groupée {invoice_id} par email...")
             self.send_invoice_by_email(invoice_id)
             print(f"✅ Facture groupée {invoice_id} envoyée par email")
         except Exception as e:
-            print(f"❌ ERREUR lors de la finalisation/envoi de la facture groupée {invoice_id}:")
+            print(f"❌ ERREUR lors de l'envoi de la facture groupée {invoice_id}:")
             print(f"   {e}")
             raise  # Propager l'erreur pour debug
 
