@@ -214,7 +214,15 @@ class SellsyClientV2:
 
         result = self._make_request("POST", "/invoices", data=invoice_data)
 
-        invoice_id = result.get("data", {}).get("id")
+        # Debug : voir la structure de la réponse
+        print(f"📥 RÉPONSE SELLSY (création facture):")
+        print(json.dumps(result, indent=2, ensure_ascii=False))
+
+        # Essayer différentes structures possibles
+        invoice_id = result.get("data", {}).get("id") or result.get("id")
+
+        if not invoice_id:
+            raise Exception(f"❌ ID de facture non trouvé dans la réponse: {result}")
 
         # Finaliser et envoyer la facture
         try:
@@ -335,7 +343,15 @@ class SellsyClientV2:
 
         result = self._make_request("POST", "/invoices", data=invoice_data)
 
-        invoice_id = result.get("data", {}).get("id")
+        # Debug : voir la structure de la réponse
+        print(f"📥 RÉPONSE SELLSY (création facture groupée):")
+        print(json.dumps(result, indent=2, ensure_ascii=False))
+
+        # Essayer différentes structures possibles
+        invoice_id = result.get("data", {}).get("id") or result.get("id")
+
+        if not invoice_id:
+            raise Exception(f"❌ ID de facture non trouvé dans la réponse: {result}")
 
         # Finaliser et envoyer la facture
         try:
