@@ -191,7 +191,7 @@ class SellsyClientV2:
         client_type = client_info.get("_entity_type", "individual")
 
         invoice_data = {
-            "status": "sent",
+            "status": "draft",
             "currency": "EUR",
             "subject": f"Abonnement mensuel - {service_name}",
             "note": "Retrouvez l'intégralité de vos factures dans votre espace abonné",
@@ -224,15 +224,14 @@ class SellsyClientV2:
         if not invoice_id:
             raise Exception(f"❌ ID de facture non trouvé dans la réponse: {result}")
 
-        # Envoyer la facture par email (déjà finalisée avec status "sent")
+        # Finaliser la facture (status: draft -> sent)
         try:
-            print(f"📧 Envoi de la facture {invoice_id} par email...")
-            self.send_invoice_by_email(invoice_id)
-            print(f"✅ Facture {invoice_id} envoyée par email")
+            print(f"🔄 Finalisation de la facture {invoice_id}...")
+            self.finalize_invoice(invoice_id)
+            print(f"✅ Facture {invoice_id} finalisée et prête à être envoyée")
         except Exception as e:
-            print(f"❌ ERREUR lors de l'envoi de la facture {invoice_id}:")
-            print(f"   {e}")
-            raise  # Propager l'erreur pour debug
+            print(f"⚠️  Avertissement: Impossible de finaliser la facture {invoice_id}: {e}")
+            print(f"   La facture reste en draft et accessible via le lien public")
 
         return {
             "success": True,
@@ -314,7 +313,7 @@ class SellsyClientV2:
             subject = f"Abonnements mensuels ({len(invoice_lines)} services)"
 
         invoice_data = {
-            "status": "sent",
+            "status": "draft",
             "currency": "EUR",
             "subject": subject,
             "note": "Retrouvez l'intégralité de vos factures dans votre espace abonné",
@@ -347,15 +346,14 @@ class SellsyClientV2:
         if not invoice_id:
             raise Exception(f"❌ ID de facture non trouvé dans la réponse: {result}")
 
-        # Envoyer la facture par email (déjà finalisée avec status "sent")
+        # Finaliser la facture (status: draft -> sent)
         try:
-            print(f"📧 Envoi de la facture groupée {invoice_id} par email...")
-            self.send_invoice_by_email(invoice_id)
-            print(f"✅ Facture groupée {invoice_id} envoyée par email")
+            print(f"🔄 Finalisation de la facture groupée {invoice_id}...")
+            self.finalize_invoice(invoice_id)
+            print(f"✅ Facture groupée {invoice_id} finalisée et prête à être envoyée")
         except Exception as e:
-            print(f"❌ ERREUR lors de l'envoi de la facture groupée {invoice_id}:")
-            print(f"   {e}")
-            raise  # Propager l'erreur pour debug
+            print(f"⚠️  Avertissement: Impossible de finaliser la facture groupée {invoice_id}: {e}")
+            print(f"   La facture reste en draft et accessible via le lien public")
 
         return {
             "success": True,
@@ -364,6 +362,19 @@ class SellsyClientV2:
             "montant_remise": montant_total_remise,
             "nombre_lignes": len(invoice_lines),
         }
+
+    def finalize_invoice(self, invoice_id: int) -> Dict[str, Any]:
+        """
+        Finalise une facture (draft -> sent) en utilisant PUT
+
+        Args:
+            invoice_id: ID de la facture dans Sellsy
+
+        Returns:
+            Réponse de l'API
+        """
+        result = self._make_request("PUT", f"/invoices/{invoice_id}", data={"status": "sent"})
+        return result
 
     def send_invoice_by_email(self, invoice_id: int) -> Dict[str, Any]:
         """
