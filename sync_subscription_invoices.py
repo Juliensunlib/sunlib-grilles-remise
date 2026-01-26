@@ -437,6 +437,11 @@ class SubscriptionInvoiceSync:
             logger.info(f"  ✅ Facture groupée créée dans Sellsy ! (ID: {invoice_id})")
             logger.info(f"     Nombre de lignes: {len(invoice_lines)}")
 
+            # Validation de la facture (passage draft → due)
+            logger.info(f"  🔄 Validation de la facture {invoice_id}...")
+            self.sellsy.validate_invoice(invoice_id)
+            logger.info(f"  ✅ Facture {invoice_id} finalisée (prête à être envoyée)")
+
             # Mise à jour des compteurs dans Airtable pour tous les services
             for update_info in services_to_update:
                 self.airtable.update_service_counters(
