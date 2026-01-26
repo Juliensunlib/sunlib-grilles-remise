@@ -226,12 +226,12 @@ class SellsyClientV2:
 
         # Finaliser et envoyer la facture
         try:
-            # OPTION 1 : Valider la facture (recommandé par l'API Sellsy)
-            print(f"🔄 Validation de la facture {invoice_id}...")
-            self._make_request("POST", f"/invoices/{invoice_id}/validate")
-            print(f"✅ Facture {invoice_id} validée")
+            # Étape 1 : Finaliser la facture (PATCH pour changer le status)
+            print(f"🔄 Finalisation de la facture {invoice_id}...")
+            self._make_request("PATCH", f"/invoices/{invoice_id}", data={"status": "sent"})
+            print(f"✅ Facture {invoice_id} finalisée (status: sent)")
 
-            # OPTION 2 : Envoyer par email (change automatiquement le statut en "sent")
+            # Étape 2 : Envoyer par email
             print(f"📧 Envoi de la facture par email...")
             self.send_invoice_by_email(invoice_id)
             print(f"✅ Facture {invoice_id} envoyée par email")
@@ -355,12 +355,12 @@ class SellsyClientV2:
 
         # Finaliser et envoyer la facture
         try:
-            # OPTION 1 : Valider la facture (recommandé par l'API Sellsy)
-            print(f"🔄 Validation de la facture groupée {invoice_id}...")
-            self._make_request("POST", f"/invoices/{invoice_id}/validate")
-            print(f"✅ Facture groupée {invoice_id} validée")
+            # Étape 1 : Finaliser la facture (PATCH pour changer le status)
+            print(f"🔄 Finalisation de la facture groupée {invoice_id}...")
+            self._make_request("PATCH", f"/invoices/{invoice_id}", data={"status": "sent"})
+            print(f"✅ Facture groupée {invoice_id} finalisée (status: sent)")
 
-            # OPTION 2 : Envoyer par email (change automatiquement le statut en "sent")
+            # Étape 2 : Envoyer par email
             print(f"📧 Envoi de la facture groupée par email...")
             self.send_invoice_by_email(invoice_id)
             print(f"✅ Facture groupée {invoice_id} envoyée par email")
