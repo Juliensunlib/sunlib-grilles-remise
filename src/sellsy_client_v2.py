@@ -208,9 +208,9 @@ class SellsyClientV2:
             "settings": {
                 "payments": {
                     "payment_modules": [],
-                    "direct_debit_module": "gocardless"
-                },
-                "bank_account_visible": False
+                    "direct_debit_module": "gocardless",
+                    "show_bank_account": False
+                }
             }
         }
 
@@ -330,9 +330,9 @@ class SellsyClientV2:
             "settings": {
                 "payments": {
                     "payment_modules": [],
-                    "direct_debit_module": "gocardless"
-                },
-                "bank_account_visible": False
+                    "direct_debit_module": "gocardless",
+                    "show_bank_account": False
+                }
             }
         }
 
