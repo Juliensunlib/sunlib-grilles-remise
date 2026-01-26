@@ -191,7 +191,7 @@ class SellsyClientV2:
         client_type = client_info.get("_entity_type", "individual")
 
         invoice_data = {
-            "status": "sent",
+            "status": "draft",
             "currency": "EUR",
             "subject": f"Abonnement mensuel - {service_name}",
             "note": "Retrouvez l'intégralité de vos factures dans votre espace abonné",
@@ -205,12 +205,6 @@ class SellsyClientV2:
             "use_lines_discount_conditions": False,
             "use_entity_discount_conditions": False,
             "discount_conditions": [],
-            "settings": {
-                "payments": {
-                    "payment_modules": [],
-                    "direct_debit_module": "gocardless"
-                }
-            }
         }
 
         # Debug
@@ -222,11 +216,15 @@ class SellsyClientV2:
 
         invoice_id = result.get("data", {}).get("id")
 
-        # Envoyer la facture par email automatiquement
+        # Finaliser et envoyer la facture
         try:
+            # Marquer la facture comme envoyée (finaliser)
+            self._make_request("PUT", f"/invoices/{invoice_id}", data={"status": "sent"})
+            # Envoyer par email
             self.send_invoice_by_email(invoice_id)
+            print(f"✅ Facture {invoice_id} finalisée et envoyée par email")
         except Exception as e:
-            print(f"⚠️ Erreur lors de l'envoi de l'email pour la facture {invoice_id}: {e}")
+            print(f"⚠️ Erreur lors de la finalisation/envoi de la facture {invoice_id}: {e}")
 
         return {
             "success": True,
@@ -308,7 +306,7 @@ class SellsyClientV2:
             subject = f"Abonnements mensuels ({len(invoice_lines)} services)"
 
         invoice_data = {
-            "status": "sent",
+            "status": "draft",
             "currency": "EUR",
             "subject": subject,
             "note": "Retrouvez l'intégralité de vos factures dans votre espace abonné",
@@ -322,12 +320,6 @@ class SellsyClientV2:
             "use_lines_discount_conditions": False,
             "use_entity_discount_conditions": False,
             "discount_conditions": [],
-            "settings": {
-                "payments": {
-                    "payment_modules": [],
-                    "direct_debit_module": "gocardless"
-                }
-            }
         }
 
         # Debug
@@ -339,11 +331,15 @@ class SellsyClientV2:
 
         invoice_id = result.get("data", {}).get("id")
 
-        # Envoyer la facture par email automatiquement
+        # Finaliser et envoyer la facture
         try:
+            # Marquer la facture comme envoyée (finaliser)
+            self._make_request("PUT", f"/invoices/{invoice_id}", data={"status": "sent"})
+            # Envoyer par email
             self.send_invoice_by_email(invoice_id)
+            print(f"✅ Facture groupée {invoice_id} finalisée et envoyée par email")
         except Exception as e:
-            print(f"⚠️ Erreur lors de l'envoi de l'email pour la facture {invoice_id}: {e}")
+            print(f"⚠️ Erreur lors de la finalisation/envoi de la facture groupée {invoice_id}: {e}")
 
         return {
             "success": True,
