@@ -1,5 +1,27 @@
 # Changelog - Système de Facturation V2.0
 
+## [2.0.2] - 2026-01-26
+
+### ✅ Correction API Sellsy - Envoi automatique par email
+
+**Problème** : Le script tentait d'envoyer les factures automatiquement par email via l'API, mais recevait une erreur 404 sur l'endpoint `/invoices/{id}/send-by-email`
+
+**Cause** : L'API Sellsy v2 ne permet pas l'envoi automatique de factures par email. L'envoi doit être effectué manuellement depuis l'interface Sellsy.
+
+**Solution** :
+- Suppression des méthodes `finalize_invoice()` et `send_invoice_by_email()`
+- Les factures sont créées avec `status: "draft"`
+- Affichage du lien public de la facture pour accès direct
+- Message clair indiquant que l'envoi doit être fait depuis l'interface Sellsy
+
+**Résultat** :
+- Les factures sont créées avec succès dans Sellsy
+- Elles restent en statut "draft"
+- Un lien public est fourni pour consultation immédiate
+- L'administrateur doit les envoyer manuellement depuis Sellsy
+
+**Code modifié** : `src/sellsy_client_v2.py`
+
 ## [2.0.1] - 2026-01-19
 
 ### ✅ Corrections importantes

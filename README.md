@@ -25,11 +25,24 @@ GITHUB ACTIONS (Workflow quotidien 9h UTC)
     ↓ Lecture table grilles_remise
     ↓ Calcul remises selon année d'abonnement
 SELLSY API
-    ↓ Création facture avec remise
-    ↓ Statut = "Envoyé" → Prélèvement GoCardless auto
+    ↓ Création facture avec remise (statut: draft)
+    ↓ Envoi manuel depuis Sellsy → Prélèvement GoCardless auto
 AIRTABLE
     ↓ Mise à jour compteurs (Mois facturés +1, Occurrences restantes -1)
 ```
+
+---
+
+## ⚠️ Limitations API Sellsy
+
+**Envoi automatique par email** : L'API Sellsy v2 ne permet pas d'envoyer automatiquement les factures par email. Le script crée les factures en statut "draft" dans Sellsy.
+
+**Action requise** : Après l'exécution du script, vous devez :
+1. Vous connecter à votre interface Sellsy
+2. Consulter les factures créées (lien public fourni dans les logs)
+3. Les envoyer manuellement par email aux clients
+
+**Alternative** : Configurez un workflow manuel ou utilisez les fonctionnalités d'automatisation de Sellsy pour l'envoi groupé de factures.
 
 ---
 

@@ -224,14 +224,13 @@ class SellsyClientV2:
         if not invoice_id:
             raise Exception(f"❌ ID de facture non trouvé dans la réponse: {result}")
 
-        # Finaliser la facture (status: draft -> sent)
-        try:
-            print(f"🔄 Finalisation de la facture {invoice_id}...")
-            self.finalize_invoice(invoice_id)
-            print(f"✅ Facture {invoice_id} finalisée et prête à être envoyée")
-        except Exception as e:
-            print(f"⚠️  Avertissement: Impossible de finaliser la facture {invoice_id}: {e}")
-            print(f"   La facture reste en draft et accessible via le lien public")
+        # Note: L'API Sellsy v2 ne permet pas l'envoi automatique par email
+        # Les factures sont créées en draft et doivent être envoyées depuis l'interface Sellsy
+        public_link = result.get("data", {}).get("public_link", {}).get("url") or result.get("public_link", {}).get("url")
+        print(f"✅ Facture {invoice_id} créée en draft")
+        if public_link:
+            print(f"🔗 Lien public: {public_link}")
+        print(f"📧 Action requise: Envoyer la facture depuis l'interface Sellsy")
 
         return {
             "success": True,
@@ -346,14 +345,13 @@ class SellsyClientV2:
         if not invoice_id:
             raise Exception(f"❌ ID de facture non trouvé dans la réponse: {result}")
 
-        # Finaliser la facture (status: draft -> sent)
-        try:
-            print(f"🔄 Finalisation de la facture groupée {invoice_id}...")
-            self.finalize_invoice(invoice_id)
-            print(f"✅ Facture groupée {invoice_id} finalisée et prête à être envoyée")
-        except Exception as e:
-            print(f"⚠️  Avertissement: Impossible de finaliser la facture groupée {invoice_id}: {e}")
-            print(f"   La facture reste en draft et accessible via le lien public")
+        # Note: L'API Sellsy v2 ne permet pas l'envoi automatique par email
+        # Les factures sont créées en draft et doivent être envoyées depuis l'interface Sellsy
+        public_link = result.get("data", {}).get("public_link", {}).get("url") or result.get("public_link", {}).get("url")
+        print(f"✅ Facture groupée {invoice_id} créée en draft")
+        if public_link:
+            print(f"🔗 Lien public: {public_link}")
+        print(f"📧 Action requise: Envoyer la facture depuis l'interface Sellsy")
 
         return {
             "success": True,
@@ -362,32 +360,6 @@ class SellsyClientV2:
             "montant_remise": montant_total_remise,
             "nombre_lignes": len(invoice_lines),
         }
-
-    def finalize_invoice(self, invoice_id: int) -> Dict[str, Any]:
-        """
-        Finalise une facture (draft -> sent) en utilisant PUT
-
-        Args:
-            invoice_id: ID de la facture dans Sellsy
-
-        Returns:
-            Réponse de l'API
-        """
-        result = self._make_request("PUT", f"/invoices/{invoice_id}", data={"status": "sent"})
-        return result
-
-    def send_invoice_by_email(self, invoice_id: int) -> Dict[str, Any]:
-        """
-        Envoie une facture par email au client
-
-        Args:
-            invoice_id: ID de la facture dans Sellsy
-
-        Returns:
-            Réponse de l'API
-        """
-        result = self._make_request("POST", f"/invoices/{invoice_id}/send-by-email")
-        return result
 
     # ---------------------------------------------------------------------
     # CLIENT
