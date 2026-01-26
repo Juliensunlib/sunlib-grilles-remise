@@ -218,13 +218,19 @@ class SellsyClientV2:
 
         # Finaliser et envoyer la facture
         try:
-            # Marquer la facture comme envoyée (finaliser)
-            self._make_request("PUT", f"/invoices/{invoice_id}", data={"status": "sent"})
-            # Envoyer par email
+            # OPTION 1 : Valider la facture (recommandé par l'API Sellsy)
+            print(f"🔄 Validation de la facture {invoice_id}...")
+            self._make_request("POST", f"/invoices/{invoice_id}/validate")
+            print(f"✅ Facture {invoice_id} validée")
+
+            # OPTION 2 : Envoyer par email (change automatiquement le statut en "sent")
+            print(f"📧 Envoi de la facture par email...")
             self.send_invoice_by_email(invoice_id)
-            print(f"✅ Facture {invoice_id} finalisée et envoyée par email")
+            print(f"✅ Facture {invoice_id} envoyée par email")
         except Exception as e:
-            print(f"⚠️ Erreur lors de la finalisation/envoi de la facture {invoice_id}: {e}")
+            print(f"❌ ERREUR lors de la finalisation/envoi de la facture {invoice_id}:")
+            print(f"   {e}")
+            raise  # Propager l'erreur pour debug
 
         return {
             "success": True,
@@ -333,13 +339,19 @@ class SellsyClientV2:
 
         # Finaliser et envoyer la facture
         try:
-            # Marquer la facture comme envoyée (finaliser)
-            self._make_request("PUT", f"/invoices/{invoice_id}", data={"status": "sent"})
-            # Envoyer par email
+            # OPTION 1 : Valider la facture (recommandé par l'API Sellsy)
+            print(f"🔄 Validation de la facture groupée {invoice_id}...")
+            self._make_request("POST", f"/invoices/{invoice_id}/validate")
+            print(f"✅ Facture groupée {invoice_id} validée")
+
+            # OPTION 2 : Envoyer par email (change automatiquement le statut en "sent")
+            print(f"📧 Envoi de la facture groupée par email...")
             self.send_invoice_by_email(invoice_id)
-            print(f"✅ Facture groupée {invoice_id} finalisée et envoyée par email")
+            print(f"✅ Facture groupée {invoice_id} envoyée par email")
         except Exception as e:
-            print(f"⚠️ Erreur lors de la finalisation/envoi de la facture groupée {invoice_id}: {e}")
+            print(f"❌ ERREUR lors de la finalisation/envoi de la facture groupée {invoice_id}:")
+            print(f"   {e}")
+            raise  # Propager l'erreur pour debug
 
         return {
             "success": True,
