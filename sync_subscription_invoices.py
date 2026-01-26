@@ -436,11 +436,7 @@ class SubscriptionInvoiceSync:
             invoice_id = result.get('invoice_id')
             logger.info(f"  ✅ Facture groupée créée dans Sellsy ! (ID: {invoice_id})")
             logger.info(f"     Nombre de lignes: {len(invoice_lines)}")
-
-            # Validation de la facture (passage draft → due)
-            logger.info(f"  🔄 Validation de la facture {invoice_id}...")
-            self.sellsy.validate_invoice(invoice_id)
-            logger.info(f"  ✅ Facture {invoice_id} finalisée (prête à être envoyée)")
+            logger.info(f"  ⏸️  Facture en attente de validation (draft)")
 
             # Mise à jour des compteurs dans Airtable pour tous les services
             for update_info in services_to_update:
@@ -452,7 +448,8 @@ class SubscriptionInvoiceSync:
 
             logger.info(f"  ✅ Compteurs mis à jour dans Airtable ({len(services_to_update)} services)")
 
-            return True
+            # Retourner l'ID de la facture créée
+            return invoice_id
 
         except Exception as e:
             logger.error(f"  ❌ Échec de la création de la facture groupée")
@@ -482,13 +479,14 @@ class SubscriptionInvoiceSync:
             logger.info("")
 
             # Traitement de chaque groupe
-            success_count = 0
+            created_invoice_ids = []
             error_count = 0
 
             for (client_id, date_key), service_group in grouped_services.items():
                 try:
-                    if self.process_grouped_subscription(client_id, date_key, service_group):
-                        success_count += 1
+                    invoice_id = self.process_grouped_subscription(client_id, date_key, service_group)
+                    if invoice_id:
+                        created_invoice_ids.append(invoice_id)
                     logger.info("")  # Ligne vide entre les groupes
 
                 except Exception as e:
@@ -496,11 +494,38 @@ class SubscriptionInvoiceSync:
                     logger.error(f"❌ Erreur: {str(e)}")
                     logger.info("")
 
+            # Validation de toutes les factures créées
+            if created_invoice_ids and not self.dry_run:
+                logger.info("=" * 70)
+                logger.info(f"🔄 VALIDATION DES FACTURES CRÉÉES ({len(created_invoice_ids)} facture(s))")
+                logger.info("=" * 70)
+
+                validated_count = 0
+                validation_errors = 0
+
+                for invoice_id in created_invoice_ids:
+                    try:
+                        logger.info(f"  🔄 Validation de la facture {invoice_id}...")
+                        self.sellsy.validate_invoice(invoice_id)
+                        logger.info(f"  ✅ Facture {invoice_id} validée (draft → due)")
+                        validated_count += 1
+                    except Exception as e:
+                        logger.error(f"  ❌ Échec validation facture {invoice_id}: {str(e)}")
+                        validation_errors += 1
+
+                logger.info("")
+                logger.info(f"✅ Factures validées: {validated_count}/{len(created_invoice_ids)}")
+                if validation_errors > 0:
+                    logger.warning(f"⚠️  Échecs de validation: {validation_errors}")
+                logger.info("")
+
             # Résumé
             logger.info("=" * 70)
             logger.info("RÉSUMÉ DE LA SYNCHRONISATION")
             logger.info("=" * 70)
-            logger.info(f"✅ Succès: {success_count} facture(s) groupée(s)")
+            logger.info(f"✅ Factures créées: {len(created_invoice_ids)}")
+            if not self.dry_run and created_invoice_ids:
+                logger.info(f"✅ Factures validées: {validated_count}/{len(created_invoice_ids)}")
             logger.info(f"❌ Échecs: {error_count}")
             logger.info(f"📊 Total services traités: {len(services)}")
 

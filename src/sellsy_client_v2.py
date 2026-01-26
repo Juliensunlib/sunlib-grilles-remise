@@ -385,10 +385,10 @@ class SellsyClientV2:
             Réponse de l'API avec la facture validée
         """
 
-        # Préparer les données (uniquement si une date est fournie)
-        data = None
+        # Préparer les données (objet vide par défaut, date optionnelle)
+        data = {}
         if date:
-            data = {"date": date}
+            data["date"] = date
 
         result = self._make_request(
             "POST",
