@@ -1,0 +1,42 @@
+name: Inspect Client 722 (GoCardless Mandate)
+
+on:
+  workflow_dispatch: # Permet de lancer manuellement
+
+jobs:
+  inspect-client:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Inspect Client 722
+        env:
+          SELLSY_V2_CLIENT_ID: ${{ secrets.SELLSY_V2_CLIENT_ID }}
+          SELLSY_V2_CLIENT_SECRET: ${{ secrets.SELLSY_V2_CLIENT_SECRET }}
+          AIRTABLE_API_KEY: ${{ secrets.AIRTABLE_API_KEY }}
+          AIRTABLE_BASE_ID: ${{ secrets.AIRTABLE_BASE_ID }}
+          AIRTABLE_CLIENTS_TABLE: ${{ secrets.AIRTABLE_CLIENTS_TABLE }}
+        run: |
+          python inspect_client_gocardless.py
+
+      - name: Upload inspection results
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: inspection-results
+          path: |
+            *.log
+            *.json
+          retention-days: 7
