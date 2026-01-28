@@ -425,6 +425,123 @@ class SellsyClientV2:
             except Exception as e2:
                 raise Exception(f"Client {client_id} introuvable (ni company ni individual): {e2}")
 
+    # ---------------------------------------------------------------------
+    # EMAIL
+    # ---------------------------------------------------------------------
+
+    def send_invoice_email(
+        self,
+        invoice_id: int,
+        subject: Optional[str] = None,
+        content: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """
+        Envoie un email de facture via l'API Sellsy /email/send
+
+        Args:
+            invoice_id: ID de la facture à envoyer
+            subject: Sujet de l'email (optionnel, généré automatiquement si non fourni)
+            content: Contenu HTML de l'email (optionnel, généré automatiquement si non fourni)
+
+        Returns:
+            Réponse de l'API avec les détails de l'email envoyé
+        """
+
+        # Récupérer les informations de la facture
+        invoice_result = self._make_request("GET", f"/invoices/{invoice_id}")
+        invoice = invoice_result.get("data", {})
+
+        if not invoice:
+            raise Exception(f"Facture {invoice_id} introuvable")
+
+        # Récupérer les informations du client
+        related = invoice.get("related", [])
+        if not related:
+            raise Exception(f"Aucun client lié à la facture {invoice_id}")
+
+        client_related = related[0]
+        client_type = client_related.get("type")
+        client_id = client_related.get("id")
+
+        client_info = self.get_client_info(int(client_id))
+
+        # Récupérer l'email du client
+        client_email = None
+        if client_type == "company":
+            # Pour les companies, récupérer l'email du contact principal
+            contacts = client_info.get("contacts", [])
+            for contact in contacts:
+                if contact.get("email"):
+                    client_email = contact.get("email")
+                    break
+        else:
+            # Pour les individuals, utiliser l'email direct
+            client_email = client_info.get("email")
+
+        if not client_email:
+            raise Exception(f"Aucun email trouvé pour le client {client_id}")
+
+        # Générer le sujet si non fourni
+        if not subject:
+            invoice_ref = invoice.get("reference", f"#{invoice_id}")
+            subject = f"Votre facture {invoice_ref}"
+
+        # Générer le contenu si non fourni
+        if not content:
+            invoice_ref = invoice.get("reference", f"#{invoice_id}")
+            public_link = invoice.get("public_link", {}).get("url", "")
+
+            content = f"""
+            <p>Bonjour,</p>
+            <p>Vous trouverez ci-joint votre facture {invoice_ref}.</p>
+            """
+
+            if public_link:
+                content += f"""
+                <p><a href="{public_link}">Consulter la facture en ligne</a></p>
+                """
+
+            content += """
+            <p>Cordialement,</p>
+            """
+
+        # Préparer les données de l'email
+        email_data = {
+            "subject": subject,
+            "content": content,
+            "to": [
+                {
+                    "email": client_email,
+                    "name": client_info.get("name", "")
+                }
+            ],
+            "related": [
+                {
+                    "type": "invoice",
+                    "id": str(invoice_id)
+                }
+            ]
+        }
+
+        # Debug
+        import json
+        print("📤 ENVOI EMAIL SELLSY:")
+        print(json.dumps(email_data, indent=2, ensure_ascii=False))
+
+        # Envoyer l'email
+        result = self._make_request("POST", "/email/send", data=email_data)
+
+        print(f"📥 RÉPONSE SELLSY (envoi email):")
+        print(json.dumps(result, indent=2, ensure_ascii=False))
+
+        email_id = result.get("data", {}).get("id") or result.get("id")
+        status = result.get("data", {}).get("status") or result.get("status")
+
+        print(f"✅ Email envoyé ! (ID: {email_id}, Status: {status})")
+        print(f"📧 Destinataire: {client_email}")
+
+        return result
+
 
 # -------------------------------------------------------------------------
 # TEST
