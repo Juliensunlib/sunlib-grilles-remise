@@ -183,8 +183,8 @@ class SubscriptionInvoiceSync:
                        f"Mois facturés: {mois_factures}, Aujourd'hui: {aujourd_hui.strftime('%Y-%m-%d')}")
             
             # Vérifier si une facturation est due
-            if mois_ecoules <= mois_factures:
-                logger.info(f"  ⏭️  Pas de facturation due (mois écoulés: {mois_ecoules} ≤ mois facturés: {mois_factures})")
+            if mois_ecoules < mois_factures:
+                logger.info(f"  ⏭️  Pas de facturation due (mois écoulés: {mois_ecoules} < mois facturés: {mois_factures})")
                 return False
 
             # Protection anti-double facturation : ne facturer qu'UN SEUL mois à la fois
@@ -359,7 +359,7 @@ class SubscriptionInvoiceSync:
                 logger.info(f"    📅 Mois écoulés: {mois_ecoules}, Mois facturés: {mois_factures}")
 
                 # Vérifier si une facturation est due
-                if mois_ecoules <= mois_factures:
+                if mois_ecoules < mois_factures:
                     logger.info(f"    ⏭️  Pas de facturation due")
                     continue
 
