@@ -509,6 +509,16 @@ class SubscriptionInvoiceSync:
                         self.sellsy.validate_invoice(invoice_id)
                         logger.info(f"  ✅ Facture {invoice_id} validée (draft → due)")
                         validated_count += 1
+
+                        # Envoi automatique de l'email après validation
+                        try:
+                            logger.info(f"  📧 Envoi de l'email pour la facture {invoice_id}...")
+                            self.sellsy.send_invoice_email(invoice_id)
+                            logger.info(f"  ✅ Email envoyé pour la facture {invoice_id}")
+                        except Exception as email_error:
+                            logger.warning(f"  ⚠️  Échec envoi email facture {invoice_id}: {str(email_error)}")
+                            logger.warning(f"  ⚠️  La facture a été validée mais l'email n'a pas été envoyé")
+
                     except Exception as e:
                         logger.error(f"  ❌ Échec validation facture {invoice_id}: {str(e)}")
                         validation_errors += 1
