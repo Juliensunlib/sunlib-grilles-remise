@@ -436,14 +436,13 @@ class SellsyClientV2:
         content: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
-        Envoie un email de facture via l'API Sellsy avec le template système configuré
-        Utilise l'endpoint /invoices/{id}/send pour appliquer automatiquement
-        le modèle d'email personnalisé configuré dans Sellsy
+        Envoie un email de facture via l'API Sellsy v2
+        Utilise l'endpoint /email/send avec les informations de la facture
 
         Args:
             invoice_id: ID de la facture à envoyer
-            subject: Ignoré - le template système sera utilisé
-            content: Ignoré - le template système sera utilisé
+            subject: Sujet de l'email (optionnel, par défaut "Votre facture")
+            content: Contenu HTML de l'email (optionnel)
 
         Returns:
             Réponse de l'API avec les détails de l'email envoyé
@@ -451,17 +450,82 @@ class SellsyClientV2:
 
         import json
 
-        print(f"📤 ENVOI EMAIL FACTURE {invoice_id} avec template système Sellsy")
+        # Récupérer les informations de la facture
+        invoice_info = self._make_request("GET", f"/invoices/{invoice_id}")
+        invoice_data = invoice_info.get("data") or invoice_info
 
-        # Envoyer l'email avec le template système de facture
-        # L'endpoint /invoices/{id}/send utilise automatiquement le template configuré
-        # avec le numéro de facture, le montant TTC, etc. remplacés dynamiquement
-        result = self._make_request("POST", f"/invoices/{invoice_id}/send")
+        # Récupérer l'email du contact
+        contact_id = invoice_data.get("contact_id")
+        if not contact_id:
+            raise Exception(f"Aucun contact associé à la facture {invoice_id}")
+
+        contact_info = self._make_request("GET", f"/contacts/{contact_id}")
+        contact_data = contact_info.get("data") or contact_info
+        contact_email = contact_data.get("email")
+
+        if not contact_email:
+            raise Exception(f"Aucun email trouvé pour le contact {contact_id}")
+
+        # Récupérer les informations pour l'email
+        invoice_number = invoice_data.get("number", "")
+        invoice_subject = invoice_data.get("subject", "")
+        total_incl_tax = invoice_data.get("amounts", {}).get("total_incl_tax", "0")
+        pdf_link = invoice_data.get("pdf_link", "")
+        public_link = invoice_data.get("public_link", {}).get("url", "")
+
+        # Construire le sujet et le contenu par défaut
+        if not subject:
+            subject = f"Votre facture {invoice_number}"
+
+        if not content:
+            content = f"""
+            <p>Bonjour,</p>
+            <p>Veuillez trouver ci-joint votre facture <strong>{invoice_number}</strong> d'un montant de <strong>{total_incl_tax}€ TTC</strong>.</p>
+            <p><strong>Objet :</strong> {invoice_subject}</p>
+            <p>Vous pouvez consulter et télécharger votre facture en cliquant sur le lien suivant :</p>
+            <p><a href="{public_link}">Voir ma facture</a></p>
+            <p>Retrouvez l'intégralité de vos factures dans votre espace abonné.</p>
+            <p>Cordialement,</p>
+            """
+
+        # Construire le payload pour l'envoi d'email
+        email_payload = {
+            "subject": subject,
+            "content": content,
+            "to": [
+                {
+                    "email": contact_email,
+                    "name": contact_data.get("civility_full_name") or contact_data.get("name", "")
+                }
+            ],
+            "related": [
+                {
+                    "type": "invoice",
+                    "id": invoice_id
+                }
+            ]
+        }
+
+        # Ajouter la facture en pièce jointe si le lien PDF existe
+        if pdf_link:
+            email_payload["attachments"] = [
+                {
+                    "url": pdf_link,
+                    "name": f"Facture_{invoice_number}.pdf"
+                }
+            ]
+
+        print(f"📤 ENVOI EMAIL FACTURE {invoice_id} à {contact_email}")
+        print(f"📧 Sujet: {subject}")
+
+        # Envoyer l'email
+        result = self._make_request("POST", "/email/send", data=email_payload)
 
         print(f"📥 RÉPONSE SELLSY (envoi email):")
         print(json.dumps(result, indent=2, ensure_ascii=False))
 
-        print(f"✅ Email de facture envoyé avec le template système personnalisé")
+        email_id = result.get("data", {}).get("id") or result.get("id")
+        print(f"✅ Email envoyé avec succès (ID: {email_id})")
 
         return result
 
