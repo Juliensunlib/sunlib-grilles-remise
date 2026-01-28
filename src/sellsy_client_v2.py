@@ -436,92 +436,32 @@ class SellsyClientV2:
         content: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
-        Envoie un email de facture via l'API Sellsy /email/send
+        Envoie un email de facture via l'API Sellsy avec le template système configuré
+        Utilise l'endpoint /invoices/{id}/send pour appliquer automatiquement
+        le modèle d'email personnalisé configuré dans Sellsy
 
         Args:
             invoice_id: ID de la facture à envoyer
-            subject: Sujet de l'email (optionnel, généré automatiquement si non fourni)
-            content: Contenu HTML de l'email (optionnel, généré automatiquement si non fourni)
+            subject: Ignoré - le template système sera utilisé
+            content: Ignoré - le template système sera utilisé
 
         Returns:
             Réponse de l'API avec les détails de l'email envoyé
         """
 
-        # Récupérer les informations de la facture
-        invoice_result = self._make_request("GET", f"/invoices/{invoice_id}")
-        invoice = invoice_result.get("data", {})
-
-        if not invoice:
-            raise Exception(f"Facture {invoice_id} introuvable")
-
-        # Récupérer les informations du client
-        related = invoice.get("related", [])
-        if not related:
-            raise Exception(f"Aucun client lié à la facture {invoice_id}")
-
-        client_related = related[0]
-        client_type = client_related.get("type")
-        client_id = client_related.get("id")
-
-        client_info = self.get_client_info(int(client_id))
-
-        # Récupérer l'email du client
-        client_email = None
-        if client_type == "company":
-            # Pour les companies, récupérer l'email du contact principal
-            contacts = client_info.get("contacts", [])
-            for contact in contacts:
-                if contact.get("email"):
-                    client_email = contact.get("email")
-                    break
-        else:
-            # Pour les individuals, utiliser l'email direct
-            client_email = client_info.get("email")
-
-        if not client_email:
-            raise Exception(f"Aucun email trouvé pour le client {client_id}")
-
-        # Préparer les données de l'email
-        # Note: On ne fournit pas subject ni content pour que Sellsy utilise
-        # le modèle personnalisé configuré dans les paramètres
-        email_data = {
-            "to": [
-                {
-                    "email": client_email,
-                    "name": client_info.get("name", "")
-                }
-            ],
-            "related": [
-                {
-                    "type": "invoice",
-                    "id": str(invoice_id)
-                }
-            ]
-        }
-
-        # Si un subject ou content personnalisé est fourni, on l'utilise
-        # Sinon, Sellsy utilisera le modèle par défaut configuré
-        if subject:
-            email_data["subject"] = subject
-        if content:
-            email_data["content"] = content
-
-        # Debug
         import json
-        print("📤 ENVOI EMAIL SELLSY:")
-        print(json.dumps(email_data, indent=2, ensure_ascii=False))
 
-        # Envoyer l'email
-        result = self._make_request("POST", "/email/send", data=email_data)
+        print(f"📤 ENVOI EMAIL FACTURE {invoice_id} avec template système Sellsy")
+
+        # Envoyer l'email avec le template système de facture
+        # L'endpoint /invoices/{id}/send utilise automatiquement le template configuré
+        # avec le numéro de facture, le montant TTC, etc. remplacés dynamiquement
+        result = self._make_request("POST", f"/invoices/{invoice_id}/send")
 
         print(f"📥 RÉPONSE SELLSY (envoi email):")
         print(json.dumps(result, indent=2, ensure_ascii=False))
 
-        email_id = result.get("data", {}).get("id") or result.get("id")
-        status = result.get("data", {}).get("status") or result.get("status")
-
-        print(f"✅ Email envoyé ! (ID: {email_id}, Status: {status})")
-        print(f"📧 Destinataire: {client_email}")
+        print(f"✅ Email de facture envoyé avec le template système personnalisé")
 
         return result
 
