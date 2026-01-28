@@ -481,34 +481,10 @@ class SellsyClientV2:
         if not client_email:
             raise Exception(f"Aucun email trouvé pour le client {client_id}")
 
-        # Générer le sujet si non fourni
-        if not subject:
-            invoice_ref = invoice.get("reference", f"#{invoice_id}")
-            subject = f"Votre facture {invoice_ref}"
-
-        # Générer le contenu si non fourni
-        if not content:
-            invoice_ref = invoice.get("reference", f"#{invoice_id}")
-            public_link = invoice.get("public_link", {}).get("url", "")
-
-            content = f"""
-            <p>Bonjour,</p>
-            <p>Vous trouverez ci-joint votre facture {invoice_ref}.</p>
-            """
-
-            if public_link:
-                content += f"""
-                <p><a href="{public_link}">Consulter la facture en ligne</a></p>
-                """
-
-            content += """
-            <p>Cordialement,</p>
-            """
-
         # Préparer les données de l'email
+        # Note: On ne fournit pas subject ni content pour que Sellsy utilise
+        # le modèle personnalisé configuré dans les paramètres
         email_data = {
-            "subject": subject,
-            "content": content,
             "to": [
                 {
                     "email": client_email,
@@ -522,6 +498,13 @@ class SellsyClientV2:
                 }
             ]
         }
+
+        # Si un subject ou content personnalisé est fourni, on l'utilise
+        # Sinon, Sellsy utilisera le modèle par défaut configuré
+        if subject:
+            email_data["subject"] = subject
+        if content:
+            email_data["content"] = content
 
         # Debug
         import json
