@@ -2,12 +2,12 @@
 Test script to send an invoice email using different methods
 """
 import os
-from src.sellsy_client_v2 import SellsyClient
+from src.sellsy_client_v2 import SellsyClientV2
 
 def test_send_invoice_email(invoice_id: int):
     """Test sending invoice email using different methods"""
 
-    sellsy = SellsyClient(
+    sellsy = SellsyClientV2(
         client_id=os.environ['SELLSY_CLIENT_ID'],
         client_secret=os.environ['SELLSY_CLIENT_SECRET']
     )
@@ -20,8 +20,7 @@ def test_send_invoice_email(invoice_id: int):
     print("Method 1: Direct email endpoint")
     print("-" * 40)
     try:
-        url = f"https://api.sellsy.com/v2/invoices/{invoice_id}/email"
-        response = sellsy._make_request('POST', url, json={})
+        response = sellsy._make_request('POST', f"/invoices/{invoice_id}/email", data={})
         print(f"✅ Success with direct endpoint!")
         print(f"Response: {response}")
     except Exception as e:
@@ -33,8 +32,7 @@ def test_send_invoice_email(invoice_id: int):
     print("Method 2: /send endpoint")
     print("-" * 40)
     try:
-        url = f"https://api.sellsy.com/v2/invoices/{invoice_id}/send"
-        response = sellsy._make_request('POST', url, json={})
+        response = sellsy._make_request('POST', f"/invoices/{invoice_id}/send", data={})
         print(f"✅ Success with /send endpoint!")
         print(f"Response: {response}")
     except Exception as e:
@@ -46,8 +44,7 @@ def test_send_invoice_email(invoice_id: int):
     print("Method 3: /actions/send endpoint")
     print("-" * 40)
     try:
-        url = f"https://api.sellsy.com/v2/invoices/{invoice_id}/actions/send"
-        response = sellsy._make_request('POST', url, json={})
+        response = sellsy._make_request('POST', f"/invoices/{invoice_id}/actions/send", data={})
         print(f"✅ Success with /actions/send endpoint!")
         print(f"Response: {response}")
     except Exception as e:
@@ -59,10 +56,10 @@ def test_send_invoice_email(invoice_id: int):
     print("Method 4: Checking invoice details")
     print("-" * 40)
     try:
-        invoice = sellsy.get_invoice_by_id(invoice_id)
+        result = sellsy._make_request('GET', f"/invoices/{invoice_id}")
+        invoice = result.get('data', {})
         print(f"Invoice found: {invoice.get('reference')}")
         print(f"Status: {invoice.get('status')}")
-        print(f"Contact email: {invoice.get('third', {}).get('email')}")
 
         # Try to find any email-related fields
         if 'actions' in invoice:
@@ -79,8 +76,7 @@ def test_send_invoice_email(invoice_id: int):
     print("Method 5: PATCH with send_email flag")
     print("-" * 40)
     try:
-        url = f"https://api.sellsy.com/v2/invoices/{invoice_id}"
-        response = sellsy._make_request('PATCH', url, json={'send_email': True})
+        response = sellsy._make_request('PATCH', f"/invoices/{invoice_id}", data={'send_email': True})
         print(f"✅ Success with PATCH!")
         print(f"Response: {response}")
     except Exception as e:
